@@ -1,0 +1,29 @@
+x-prod-app: &prod-app
+  image: ${APP_IMAGE:?Set APP_IMAGE to the image tag to deploy}
+  restart: unless-stopped
+  depends_on:
+    db:
+      condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  migrate:
+    extends:
+      file: compose.yaml
+      service: worker
+    image: ${APP_IMAGE:?Set APP_IMAGE to the image tag to deploy}
+    command: ["php", "artisan", "migrate", "--force"]
+    restart: "no"
+
+  web:
+    <<: *prod-app
+
+  worker:
+    <<: *prod-app
+
+  scheduler:
+    <<: *prod-app
+
+  db:
+    restart: unless-stopped

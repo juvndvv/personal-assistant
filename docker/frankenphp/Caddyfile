@@ -1,0 +1,52 @@
+{
+	skip_install_trust
+	frankenphp
+	{$CADDY_GLOBAL_OPTIONS}
+}
+
+http://localhost:2080 {
+	bind 127.0.0.1
+	root * /app/public
+
+	@health path /up
+	handle @health {
+		php_server
+	}
+
+	handle {
+		respond 404
+	}
+}
+
+{$SERVER_NAME:localhost} {
+	{$CADDY_SERVER_EXTRA_DIRECTIVES}
+
+	log {
+		output stderr
+		format json
+	}
+
+	root * /app/public
+	encode zstd br gzip
+
+	@laravel path /api/* /sanctum/* /up
+	handle @laravel {
+		php_server
+	}
+
+	handle {
+		root * /app/public/app
+
+		route {
+			try_files {path} /index.html
+
+			@unversioned path /index.html /ngsw.json /manifest.webmanifest /ngsw-worker.js /safety-worker.js /worker-basic.min.js
+			header @unversioned Cache-Control "no-cache"
+
+			@fingerprinted path_regexp -[A-Za-z0-9_-]{8}\.(js|css)$
+			header @fingerprinted Cache-Control "public, max-age=31536000, immutable"
+
+			file_server
+		}
+	}
+}

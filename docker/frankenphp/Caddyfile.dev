@@ -1,0 +1,40 @@
+{
+	skip_install_trust
+	frankenphp
+	{$CADDY_GLOBAL_OPTIONS}
+}
+
+http://localhost:2080 {
+	bind 127.0.0.1
+	root * /app/public
+
+	@health path /up
+	handle @health {
+		php_server
+	}
+
+	handle {
+		respond 404
+	}
+}
+
+{$SERVER_NAME:localhost} {
+	tls internal
+
+	log {
+		output stderr
+		format console
+	}
+
+	root * /app/public
+
+	@laravel path /api/* /sanctum/* /up
+	handle @laravel {
+		encode zstd br gzip
+		php_server
+	}
+
+	handle {
+		reverse_proxy frontend:4200
+	}
+}

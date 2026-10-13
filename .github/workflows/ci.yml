@@ -1,0 +1,171 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: 24.21.0
+  PHP_VERSION: "8.5"
+  RUNTIME_IMAGE: personal-finance:ci
+
+jobs:
+  pins:
+    name: Version pins
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: scripts/check-pins.sh
+
+  backend:
+    name: Backend (Pint, PHPStan, Pest)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_DB: finance_test
+          POSTGRES_USER: finance
+          POSTGRES_PASSWORD: finance
+          TZ: Europe/Madrid
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U finance -d finance_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_USERNAME: finance
+      DB_PASSWORD: finance
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: shivammathur/setup-php@2.40.0
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: pdo_pgsql, intl, zip, bcmath, pcntl
+          coverage: none
+          tools: composer:2.10.3
+      - id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6.1.0
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+      - run: composer install --no-interaction --no-progress --prefer-dist
+      - run: cp .env.example .env && php artisan key:generate --ansi
+      - run: vendor/bin/pint --test
+      - run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+      - run: php artisan test --parallel
+
+  frontend:
+    name: Frontend (ESLint, Prettier, Vitest, build)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npx prettier --check .
+      - run: npm test
+      - run: npx ng build
+      - name: Service worker caches no API URL
+        run: |
+          jq -e '(.dataGroups // []) | length == 0' dist/frontend/browser/ngsw.json
+          jq -e '[.assetGroups[].urls[] | select(test("^/(api|sanctum|up)(/|$)"))] | length == 0' dist/frontend/browser/ngsw.json
+      - name: Web manifest is valid
+        run: jq -e '.name and .short_name and .start_url and .display and (.icons | length > 0)' dist/frontend/browser/manifest.webmanifest
+
+  image:
+    name: Runtime image
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: docker/setup-buildx-action@v4.4.1
+      - uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          target: runtime
+          push: false
+          tags: ${{ env.RUNTIME_IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  e2e:
+    name: End-to-end (Playwright)
+    runs-on: ubuntu-24.04
+    needs: image
+    env:
+      COMPOSE_FILE: compose.yaml:compose.prod.yaml
+      E2E_BASE_URL: https://localhost
+      E2E_USER_EMAIL: e2e@example.com
+      E2E_USER_PASSWORD: e2e-password-123
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: docker/setup-buildx-action@v4.4.1
+      - uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          target: runtime
+          load: true
+          push: false
+          tags: ${{ env.RUNTIME_IMAGE }}
+          cache-from: type=gha
+      - name: Write the compose environment
+        run: |
+          {
+            echo "APP_IMAGE=${RUNTIME_IMAGE}"
+            echo "APP_KEY=base64:$(openssl rand -base64 32)"
+            echo "APP_URL=${E2E_BASE_URL}"
+            echo "SERVER_NAME=localhost"
+            echo "DB_PASSWORD=$(openssl rand -hex 16)"
+            echo "SANCTUM_STATEFUL_DOMAINS=localhost"
+          } > .env
+      - run: docker compose config --quiet
+      - run: docker compose up -d --wait --wait-timeout 180
+      - run: curl -fsSk -o /dev/null "${E2E_BASE_URL}/up"
+      - name: Create the e2e user
+        run: printf '%s' "${E2E_USER_PASSWORD}" | docker compose exec -T web php artisan app:create-user "${E2E_USER_EMAIL}" --name=E2E --password-stdin
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - working-directory: frontend
+        run: npx playwright install --with-deps chromium webkit
+      - working-directory: frontend
+        run: npx playwright test
+      - if: failure()
+        run: docker compose logs --no-color
+      - if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 7
+      - if: always()
+        run: docker compose down -v

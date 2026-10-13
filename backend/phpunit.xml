@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Arch">
+            <directory>tests/Arch</directory>
+        </testsuite>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Database">
+            <directory>tests/Database</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_PORT" value="5432"/>
+        <env name="DB_USERNAME" value="finance"/>
+        <env name="DB_PASSWORD" value="finance"/>
+        <env name="APP_ENV" value="testing" force="true"/>
+        <server name="APP_ENV" value="testing"/>
+        <env name="APP_URL" value="https://localhost" force="true"/>
+        <server name="APP_URL" value="https://localhost"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
+        <server name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <env name="APP_TIMEZONE" value="Europe/Madrid" force="true"/>
+        <server name="APP_TIMEZONE" value="Europe/Madrid"/>
+        <env name="APP_LOCALE" value="es" force="true"/>
+        <server name="APP_LOCALE" value="es"/>
+        <env name="BCRYPT_ROUNDS" value="4" force="true"/>
+        <server name="BCRYPT_ROUNDS" value="4"/>
+        <env name="BROADCAST_CONNECTION" value="null" force="true"/>
+        <server name="BROADCAST_CONNECTION" value="null"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
+        <server name="CACHE_STORE" value="array"/>
+        <env name="DB_CONNECTION" value="pgsql" force="true"/>
+        <server name="DB_CONNECTION" value="pgsql"/>
+        <env name="DB_DATABASE" value="finance_test" force="true"/>
+        <server name="DB_DATABASE" value="finance_test"/>
+        <env name="DB_URL" value="" force="true"/>
+        <server name="DB_URL" value=""/>
+        <env name="DB_TIMEZONE" value="Europe/Madrid" force="true"/>
+        <server name="DB_TIMEZONE" value="Europe/Madrid"/>
+        <env name="LOG_CHANNEL" value="null" force="true"/>
+        <server name="LOG_CHANNEL" value="null"/>
+        <env name="LOG_STACK" value="null" force="true"/>
+        <server name="LOG_STACK" value="null"/>
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <server name="MAIL_MAILER" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <server name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+        <server name="SESSION_DRIVER" value="array"/>
+        <env name="SESSION_DOMAIN" value="" force="true"/>
+        <server name="SESSION_DOMAIN" value=""/>
+        <env name="SESSION_SECURE_COOKIE" value="true" force="true"/>
+        <server name="SESSION_SECURE_COOKIE" value="true"/>
+        <env name="SANCTUM_STATEFUL_DOMAINS" value="localhost" force="true"/>
+        <server name="SANCTUM_STATEFUL_DOMAINS" value="localhost"/>
+        <env name="OPENAI_API_KEY" value="" force="true"/>
+        <server name="OPENAI_API_KEY" value=""/>
+        <env name="AI_EXTRACTION_PROVIDER" value="openai" force="true"/>
+        <server name="AI_EXTRACTION_PROVIDER" value="openai"/>
+        <env name="AI_EXTRACTION_MODEL" value="" force="true"/>
+        <server name="AI_EXTRACTION_MODEL" value=""/>
+        <env name="AI_TRANSCRIPTION_PROVIDER" value="openai" force="true"/>
+        <server name="AI_TRANSCRIPTION_PROVIDER" value="openai"/>
+        <env name="AI_TRANSCRIPTION_MODEL" value="" force="true"/>
+        <server name="AI_TRANSCRIPTION_MODEL" value=""/>
+        <env name="AI_TIMEOUT" value="12" force="true"/>
+        <server name="AI_TIMEOUT" value="12"/>
+        <env name="AI_FAILOVER" value="" force="true"/>
+        <server name="AI_FAILOVER" value=""/>
+        <env name="PULSE_ENABLED" value="false" force="true"/>
+        <server name="PULSE_ENABLED" value="false"/>
+        <env name="TELESCOPE_ENABLED" value="false" force="true"/>
+        <server name="TELESCOPE_ENABLED" value="false"/>
+        <env name="NIGHTWATCH_ENABLED" value="false" force="true"/>
+        <server name="NIGHTWATCH_ENABLED" value="false"/>
+    </php>
+</phpunit>

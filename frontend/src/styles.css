@@ -1,0 +1,21 @@
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss';
+@import '@spartan-ng/brain/hlm-tailwind-preset.css';
+@import 'yukit-web/theme.css';
+
+@source "../node_modules/yukit-web";
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tabular-amount {
+  font-variant-numeric: tabular-nums;
+}

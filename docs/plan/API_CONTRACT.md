@@ -1,0 +1,757 @@
+# API contract `/api/v1`
+
+Backend and frontend both code against this file. If an implementer needs a change, they update this file first, in the same milestone, and the reviewer checks that code and contract match. Each endpoint lists the milestone (`M#`) that delivers it. Table shapes are in `DATA_MODEL.md`.
+
+## 1. Conventions
+
+### 1.1 Transport and auth
+
+- Same origin for SPA and API (`https://<host>`). JSON only (`Accept: application/json`), except multipart uploads and file downloads.
+- Laravel Sanctum SPA mode: session cookie plus CSRF. The SPA calls `GET /sanctum/csrf-cookie` once before login and again after a 419. Angular sends `X-XSRF-TOKEN` from the `XSRF-TOKEN` cookie (`withXsrfConfiguration`) and uses `withCredentials`.
+- Every `/api/v1` route except `POST /auth/login` requires `auth:sanctum`. There is no register endpoint.
+- Routes are defined in `backend/routes/api.php` with prefix `api/v1`. Controllers live in `App\Http\Controllers\Api\V1`, requests in `App\Http\Requests\Api\V1`, resources in `App\Http\Resources\Api\V1`.
+
+### 1.2 Data formats
+
+| Kind | Format |
+|---|---|
+| Money | Integer cents, field names end in `_cents`. **Requests send unsigned magnitudes** (`amount_cents >= 1`) plus a `type`/`kind`. Responses send `amount_cents` (unsigned magnitude) and, on ledger rows, `signed_amount_cents` (effect on the account). Balances (`balance_cents`, `target_balance_cents`, `opening_balance_cents`) are signed. Maximum magnitude: `99_999_999_99` (99,999,999.99 €). |
+| Dates | `YYYY-MM-DD` strings, Europe/Madrid calendar dates. |
+| Timestamps | ISO 8601 with offset (`2026-10-13T08:15:00+02:00`). |
+| Period labels | `YYYY-MM` (see `DECISIONS.md` ADR-003). |
+| IDs | Integers, except `captures` and `attachments` (ULID strings). |
+| Booleans in query strings | `1`/`0`. |
+| Arrays in query strings | `key[]=1&key[]=2`. |
+
+### 1.3 Pagination
+
+Paginated lists use Laravel's length-aware paginator:
+
+```json
+{
+  "data": [ ... ],
+  "links": { "first": "...", "last": "...", "prev": null, "next": "..." },
+  "meta": { "current_page": 1, "last_page": 4, "per_page": 50, "total": 180, "from": 1, "to": 50 }
+}
+```
+
+Query: `page` (default 1), `per_page` (default 50, max 100). Non-paginated lists return `{ "data": [ ... ] }`.
+
+### 1.4 Errors
+
+| Status | When | Body |
+|---|---|---|
+| 401 | Not authenticated | `{ "message": "Unauthenticated." }` |
+| 403 | Forbidden (blocked IP, M8) | `{ "message": "...", "code": "ip_blocked" }` |
+| 404 | Unknown or soft-deleted resource | `{ "message": "..." }` |
+| 409 | Domain conflict with current state | `{ "message": "<human message>", "code": "<code>" }` |
+| 419 | CSRF token mismatch / expired | Laravel default. The SPA refreshes the CSRF cookie and retries once. |
+| 422 | Validation (including domain validation of the input) | `{ "message": "...", "errors": { "field": ["..."] } }` |
+| 429 | Rate limited | `{ "message": "Too Many Attempts." }` + `Retry-After` header |
+
+409 codes:
+
+| Code | Meaning |
+|---|---|
+| `account_has_movements` | Account cannot be deleted because it has live movements (archive it instead). |
+| `opening_date_after_movements` | `opening_date` would move after existing movements. |
+| `category_in_use` | Category is referenced by movements, templates, budgets or drafts. |
+| `category_has_children` | Category has subcategories. |
+| `transfer_leg_immutable` | A transfer leg was edited or deleted through `/transactions`; use `/transfers/{id}`. |
+| `draft_not_pending` | The draft is already confirmed or discarded. |
+| `tag_name_taken` | Rename collides with an existing tag (case-insensitive). |
+| `attachment_not_deletable` | The attachment belongs to a pending capture (discard the draft instead). |
+| `not_a_credit_card` | Settlement suggestion requested for a non-card account. |
+
+Validation messages are Spanish (`lang/es`), field keys English.
+
+### 1.5 Rate limiters
+
+| Name | Limit | Applies to | Milestone |
+|---|---|---|---|
+| `login` | 5/min per email + IP | `POST /auth/login` | M0 |
+| `captures` | 60/hour per user | `POST /captures` | M3 |
+| `exports` | 6/min per user | `/exports/*` | M7 |
+| `api` | 120/min per user | all `/api/v1` | M8 |
+| IP lockout | 10 failed logins per IP in 15 min → 403 `ip_blocked` for 60 min | `/auth/*` | M8 |
+
+## 2. Resource shapes
+
+All `*Resource` classes return these shapes. Optional embedded objects are `null`, never omitted.
+
+### 2.1 `User`
+
+```json
+{ "id": 1, "name": "Dani", "email": "dani@example.com" }
+```
+
+### 2.2 `Period`
+
+```json
+{ "label": "2026-10", "start": "2026-09-25", "end": "2026-10-24", "month_start_day": 25 }
+```
+
+### 2.3 `Settings`
+
+```json
+{
+  "month_start_day": 25,
+  "default_account_id": 3,
+  "last_used_account_id": 3,
+  "orphan_draft_ttl_days": 7,
+  "current_period": { "label": "2026-10", "start": "2026-09-25", "end": "2026-10-24", "month_start_day": 25 }
+}
+```
+
+### 2.4 `Account`
+
+```json
+{
+  "id": 3,
+  "name": "BBVA",
+  "type": "checking",
+  "opening_balance_cents": 150000,
+  "opening_date": "2026-01-01",
+  "statement_day": null,
+  "settlement_account_id": null,
+  "sort_order": 0,
+  "archived_at": null,
+  "balance_cents": 234567,
+  "last_movement_date": "2026-10-12",
+  "last_adjustment_date": null,
+  "last_updated_on": "2026-10-12",
+  "stale": false,
+  "created_at": "2026-10-13T08:00:00+02:00"
+}
+```
+
+`AccountSummary` (embedded): `{ "id": 3, "name": "BBVA", "type": "checking", "archived": false }`.
+
+### 2.5 `Category` (tree node)
+
+```json
+{
+  "id": 10, "kind": "expense", "name": "Alimentación", "parent_id": null,
+  "icon": "shopping-cart", "color": "#2E7D32", "sort_order": 0, "archived_at": null,
+  "children": [
+    { "id": 11, "kind": "expense", "name": "Supermercado", "parent_id": 10, "icon": null, "color": null, "sort_order": 0, "archived_at": null, "children": [] }
+  ]
+}
+```
+
+`CategorySummary` (embedded): `{ "id": 11, "name": "Supermercado", "kind": "expense", "parent_id": 10, "parent_name": "Alimentación" }`.
+
+### 2.6 `Tag`
+
+```json
+{ "id": 5, "name": "viaje roma", "usage_count": 12 }
+```
+
+`usage_count` is present only in `GET /tags`; embedded tags are `{ "id": 5, "name": "viaje roma" }`.
+
+### 2.7 `Transaction`
+
+```json
+{
+  "id": 120,
+  "type": "expense",
+  "account": { "id": 7, "name": "Visa", "type": "credit_card", "archived": false },
+  "amount_cents": 2350,
+  "signed_amount_cents": -2350,
+  "date": "2026-10-12",
+  "category": { "id": 11, "name": "Supermercado", "kind": "expense", "parent_id": 10, "parent_name": "Alimentación" },
+  "description": "Compra semanal",
+  "merchant": "Mercadona",
+  "note": null,
+  "origin": "voice",
+  "tags": [ { "id": 5, "name": "casa" } ],
+  "transfer": null,
+  "adjustment_target_cents": null,
+  "recurring_template_id": null,
+  "attachments_count": 1,
+  "created_at": "2026-10-12T19:02:11+02:00",
+  "updated_at": "2026-10-12T19:02:11+02:00"
+}
+```
+
+For `type = transfer`, `category` is null and:
+
+```json
+"transfer": { "id": 44, "kind": "card_settlement", "leg": "out", "counter_account": { "id": 7, "name": "Visa", "type": "credit_card", "archived": false } }
+```
+
+For `type = adjustment`, `adjustment_target_cents` is the target balance and `signed_amount_cents` the delta.
+
+### 2.8 `Transfer`
+
+```json
+{
+  "id": 44,
+  "kind": "transfer",
+  "from_account": { "id": 3, "name": "BBVA", "type": "checking", "archived": false },
+  "to_account": { "id": 9, "name": "Ahorro", "type": "savings_investment", "archived": false },
+  "amount_cents": 10000,
+  "date": "2026-10-01",
+  "note": null,
+  "origin": "manual",
+  "out_transaction_id": 130,
+  "in_transaction_id": 131,
+  "created_at": "2026-10-01T10:00:00+02:00"
+}
+```
+
+### 2.9 `Attachment`
+
+```json
+{
+  "id": "01JABCDEF...",
+  "kind": "image",
+  "mime": "image/jpeg",
+  "size_bytes": 182334,
+  "original_name": "ticket.jpg",
+  "url": "/api/v1/attachments/01JABCDEF...",
+  "download_url": "/api/v1/attachments/01JABCDEF...?download=1",
+  "created_at": "2026-10-12T19:02:00+02:00"
+}
+```
+
+### 2.10 `Capture`
+
+```json
+{
+  "id": "01JABC...",
+  "kind": "voice",
+  "status": "completed",
+  "transcript": "Veinte euros en Mercadona con la Visa",
+  "error": null,
+  "transcription_ms": 900,
+  "extraction_ms": 2100,
+  "attachments": [ { "...Attachment": "" } ],
+  "created_at": "2026-10-12T19:01:58+02:00"
+}
+```
+
+`status = failed` means the AI step failed; the draft is still usable (empty or partial proposals, transcript kept when available).
+
+### 2.11 `Draft`
+
+```json
+{
+  "id": 88,
+  "origin": "voice",
+  "status": "pending",
+  "proposal": {
+    "type": "expense",
+    "amount_cents": 2000,
+    "date": "2026-10-12",
+    "account_id": 7,
+    "to_account_id": null,
+    "category_id": 11,
+    "description": "Mercadona",
+    "merchant": "Mercadona"
+  },
+  "confidence": { "type": 0.95, "amount_cents": 0.98, "date": 0.6, "account_id": 0.9, "category_id": 0.55, "description": 0.9, "merchant": 0.9 },
+  "field_sources": { "type": "ai", "amount_cents": "ai", "date": "default", "account_id": "ai", "category_id": "history", "description": "ai", "merchant": "ai" },
+  "low_confidence_fields": [ "category_id" ],
+  "capture": { "...Capture": "" },
+  "recurring": null,
+  "transaction_id": null,
+  "transfer_id": null,
+  "corrected_fields": null,
+  "confirmed_at": null,
+  "discarded_at": null,
+  "created_at": "2026-10-12T19:02:00+02:00"
+}
+```
+
+For `origin = recurring` (M4), `capture` is null and:
+
+```json
+"recurring": { "template_id": 4, "template_name": "Luz", "occurrence_id": 31, "due_date": "2026-10-05", "is_variable": true }
+```
+
+Field-source values: `ai` (extractor), `history` (learned hint, M7), `template` (recurring template), `default` (server default such as today or the last used account).
+
+### 2.12 `RecurringTemplate` (M4)
+
+```json
+{
+  "id": 4, "name": "Luz", "type": "expense", "amount_cents": 6000, "is_variable": true,
+  "account": { "id": 3, "name": "BBVA", "type": "checking", "archived": false },
+  "category": { "id": 21, "name": "Electricidad", "kind": "expense", "parent_id": 20, "parent_name": "Vivienda" },
+  "frequency": "monthly", "day_of_month": 5, "starts_on": "2026-01-01", "ends_on": null,
+  "description": "Iberdrola", "merchant": "Iberdrola", "note": null,
+  "paused_at": null, "next_due_date": "2026-11-05", "created_at": "..."
+}
+```
+
+### 2.13 `Budget` (M6)
+
+```json
+{ "category": { "id": 10, "name": "Alimentación", "kind": "expense", "parent_id": null, "parent_name": null }, "amount_cents": 40000, "effective_from": "2026-07" }
+```
+
+`amount_cents` is null and `effective_from` null when the category has no effective budget in the requested period.
+
+## 3. Endpoints
+
+### 3.1 Health and CSRF (M0)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/up` | Laravel health route. 200 when the app boots and the DB answers. No auth. |
+| GET | `/sanctum/csrf-cookie` | 204, sets `XSRF-TOKEN`. No auth. |
+
+### 3.2 Auth (M0)
+
+#### `POST /api/v1/auth/login` (throttle `login`)
+
+Request: `{ "email": "dani@example.com", "password": "secret", "remember": true }` (`remember` optional, default false).
+Response 200: `{ "data": User }`. The session is regenerated.
+Errors: 422 `errors.email` = "Credenciales incorrectas" (same message for unknown email and wrong password); 429.
+
+#### `POST /api/v1/auth/logout`
+
+Response 204. Invalidates the session, regenerates the CSRF token, clears the remember cookie.
+
+#### `GET /api/v1/auth/me`
+
+Response 200 `{ "data": User }`; 401 when the session is missing.
+
+#### `PUT /api/v1/auth/password` (throttle `password`)
+
+Request: `{ "current_password": "...", "password": "...", "password_confirmation": "..." }` (min 12 chars).
+Response 204. Errors: 422; 429 (throttle `password`: 5 attempts per minute keyed by user id and IP). Other sessions of the user are logged out; the current session is kept and regenerated.
+
+### 3.3 Settings and periods (M1)
+
+#### `GET /api/v1/settings` → 200 `{ "data": Settings }`
+
+#### `PATCH /api/v1/settings`
+
+Request (all optional): `{ "month_start_day": 25, "default_account_id": 3, "orphan_draft_ttl_days": 7 }`.
+Validation: `month_start_day` integer 1..28; `default_account_id` existing, non-archived account or null; `orphan_draft_ttl_days` 1..90.
+Response 200 `{ "data": Settings }`.
+
+#### `GET /api/v1/periods/current?month_start_day=25` → 200 `{ "data": Period }`
+
+`month_start_day` (1..28) is optional and only previews the current period under a different start day (used by the settings screen before saving); nothing is persisted.
+
+#### `GET /api/v1/periods?count=12&until=2026-10`
+
+`count` 1..36 (default 12); `until` a period label (default current). Returns the `count` periods ending at `until`, **oldest first**: `{ "data": [Period, ...] }`.
+
+#### `GET /api/v1/periods/resolve?date=2026-10-24` → 200 `{ "data": Period }`
+
+### 3.4 Accounts (M1)
+
+#### `GET /api/v1/accounts?include_archived=0`
+
+Non-paginated, ordered by `type`, `sort_order`, `name`. `{ "data": [Account, ...] }`.
+
+#### `POST /api/v1/accounts`
+
+Request:
+
+```json
+{ "name": "Visa", "type": "credit_card", "opening_balance_cents": -12000, "opening_date": "2026-10-01",
+  "statement_day": 5, "settlement_account_id": 3, "sort_order": 0 }
+```
+
+Validation: `name` 1..80, unique (case-insensitive) among non-deleted; `type` enum; `opening_balance_cents` integer (signed); `opening_date` date, not in the future; `statement_day` 1..28 and `settlement_account_id` (non-card account) only when `type = credit_card`, otherwise prohibited.
+Response 201 `{ "data": Account }`.
+
+#### `GET /api/v1/accounts/{id}` → 200 `{ "data": Account }`; 404.
+
+#### `PATCH /api/v1/accounts/{id}`
+
+Same fields as POST, all optional; `type` cannot change once the account has movements (422 `errors.type`).
+Errors: 409 `opening_date_after_movements`.
+
+#### `DELETE /api/v1/accounts/{id}`
+
+Soft delete. 204. Errors: 409 `account_has_movements`.
+
+#### `POST /api/v1/accounts/{id}/archive` / `POST /api/v1/accounts/{id}/unarchive`
+
+200 `{ "data": Account }`. Archived accounts are hidden from pickers, reject new movements (422 `errors.account_id` on create), and still count in net worth. Archiving clears `settings.default_account_id`/`last_used_account_id` if they point to it.
+
+#### `GET /api/v1/accounts/{id}/balance?date=2026-10-01`
+
+200 `{ "data": { "account_id": 3, "date": "2026-10-01", "balance_cents": 120000 } }`. `date` defaults to today.
+
+#### `POST /api/v1/accounts/{id}/adjustments` (RF-05)
+
+Request: `{ "date": "2026-10-13", "target_balance_cents": 1250000, "note": "Valor cartera" }`.
+The server computes `delta = target − balance_at(date)` and stores an `adjustment` transaction with `signed_amount_cents = delta`.
+Response 201 `{ "data": Transaction }`.
+Errors: 422 `errors.target_balance_cents` when the delta is 0; 422 `errors.date` when before `opening_date` or in the future; 422 on archived account.
+
+#### `GET /api/v1/accounts/{id}/settlement-suggestion?date=2026-10-13` (RF-04, M2)
+
+200:
+
+```json
+{ "data": {
+  "card_account_id": 7,
+  "statement_start": "2026-09-06",
+  "statement_end": "2026-10-05",
+  "statement_balance_cents": -45230,
+  "settled_since_cents": 0,
+  "suggested_cents": 45230,
+  "from_account_id": 3
+} }
+```
+
+Rules: with `statement_day = d`, `statement_end` is the latest date ≤ `date` with day `d`; `statement_start` is the day after the previous one. `suggested_cents = max(0, −balance_at(statement_end) − settlements dated in (statement_end, date])`. Without `statement_day`, `statement_start`/`statement_end` are null and `suggested_cents = max(0, −balance_at(date))`. `from_account_id` is the card's `settlement_account_id` (or `settings.default_account_id`).
+Errors: 409 `not_a_credit_card`.
+
+### 3.5 Categories (M1)
+
+#### `GET /api/v1/categories?kind=expense&include_archived=0`
+
+Tree: `{ "data": [Category, ...] }`, top-level ordered by `sort_order`, `name`. Without `kind`, both kinds.
+
+#### `POST /api/v1/categories`
+
+Request: `{ "kind": "expense", "name": "Supermercado", "parent_id": 10, "icon": "shopping-cart", "color": "#2E7D32", "sort_order": 0 }`.
+Validation: name 1..60 unique per `(kind, parent)`; `parent_id` must be a top-level, non-archived category of the same kind.
+Response 201 `{ "data": Category }`.
+
+#### `PATCH /api/v1/categories/{id}`
+
+Fields: `name`, `icon`, `color`, `sort_order`, `parent_id` (only to another top-level category of the same kind, and only if the category has no children). `kind` is immutable. Response 200.
+
+#### `POST /api/v1/categories/{id}/archive` / `unarchive` → 200 `{ "data": Category }`
+
+Archiving a parent hides its children from pickers.
+
+#### `DELETE /api/v1/categories/{id}`
+
+204. Errors: 409 `category_in_use`, 409 `category_has_children`.
+
+### 3.6 Quick add (M2)
+
+#### `GET /api/v1/quick-add/defaults`
+
+```json
+{ "data": {
+  "date": "2026-10-13",
+  "account_id": 3,
+  "frequent_category_ids": { "expense": [11, 14, 31, 22, 40, 12, 18, 27], "income": [50, 51] }
+} }
+```
+
+`account_id`: `last_used_account_id` if writable, otherwise `default_account_id`, otherwise the first non-archived account. Frequent categories: up to 8 per kind, ranked by count over the last 90 days, ties by most recent use; padded with remaining non-archived leaf categories by `sort_order`.
+
+### 3.7 Transactions (M2)
+
+#### `GET /api/v1/transactions` (RF-07)
+
+Query parameters (all optional, combined with AND; multi-value parameters OR within themselves):
+
+| Param | Meaning |
+|---|---|
+| `q` | Accent- and case-insensitive substring over description, merchant and note |
+| `type[]` | `expense`, `income`, `transfer`, `adjustment` |
+| `account_id[]` | Accounts |
+| `category_id[]` | Categories; a parent includes its children |
+| `tag_id[]` + `tag_mode` | `any` (default) or `all` |
+| `origin[]` | `manual`, `voice`, `photo`, `recurring` |
+| `period` | Period label; overrides `date_from`/`date_to` |
+| `date_from`, `date_to` | Inclusive dates |
+| `amount_min_cents`, `amount_max_cents` | Inclusive, on the unsigned magnitude |
+| `has_attachments` | `1` / `0` |
+| `sort` | `-date` (default; ties by `-id`), `date`, `-amount`, `amount` |
+| `page`, `per_page` | Pagination |
+
+Transfer collapsing: without `account_id[]`, each transfer appears once (its `out` leg, with `counter_account`). With `account_id[]`, the legs on the selected accounts are returned.
+Response 200 paginated `Transaction` list, plus `meta.totals`: `{ "income_cents": 0, "expense_cents": 0 }` over the whole filtered set (reportable rows only).
+
+#### `POST /api/v1/transactions` (RF-02; draft confirm from M3)
+
+Request:
+
+```json
+{
+  "type": "expense",
+  "amount_cents": 2350,
+  "date": "2026-10-12",
+  "account_id": 7,
+  "category_id": 11,
+  "description": "Compra semanal",
+  "merchant": "Mercadona",
+  "note": null,
+  "tags": ["casa"],
+  "draft_id": null
+}
+```
+
+Validation: `type` in `expense|income`; `amount_cents` integer 1..99_999_999_99; `date` defaults to today, not before the account's `opening_date`, not more than 366 days in the future; `account_id` defaults to the quick-add default account and must be writable; `category_id` required, non-archived, kind = `type`; `tags` array of up to 10 strings 1..40 chars (find-or-create, case-insensitive); `draft_id` optional (M3+), must be `pending`.
+Effects: creates the row with `origin = manual`, or the draft's origin when `draft_id` is set; sets `settings.last_used_account_id`; with `draft_id`: in the same DB transaction marks the draft `confirmed`, stores `corrected_fields` (proposal fields whose submitted value differs), links capture attachments to the new transaction, and, for recurring drafts (M4), marks the occurrence `posted`; learns a categorization hint (M7).
+Response 201 `{ "data": Transaction }`.
+Errors: 422; 409 `draft_not_pending`.
+
+#### `GET /api/v1/transactions/{id}` → 200 `{ "data": Transaction }`
+
+#### `PATCH /api/v1/transactions/{id}`
+
+- Expense/income rows: any of `type` (`expense|income`, re-signs the amount and requires a matching category), `amount_cents`, `date`, `account_id`, `category_id`, `description`, `merchant`, `note`, `tags` (replaces the set).
+- Adjustment rows: `date`, `target_balance_cents`, `note`; the delta is recomputed excluding the row itself (422 if it becomes 0).
+- Transfer legs: 409 `transfer_leg_immutable`.
+
+Response 200 `{ "data": Transaction }`.
+
+#### `DELETE /api/v1/transactions/{id}`
+
+Soft delete, 204. Transfer legs: 409 `transfer_leg_immutable`. Attachments stay linked (restorable).
+
+#### `POST /api/v1/transactions/{id}/restore`
+
+Restores a soft-deleted expense/income/adjustment (undo). 200 `{ "data": Transaction }`. 422 if the account is now archived. Transfer legs: 409.
+
+### 3.8 Transfers and card settlement (M2)
+
+#### `POST /api/v1/transfers` (RF-03, RF-04)
+
+Request: `{ "kind": "transfer", "from_account_id": 3, "to_account_id": 9, "amount_cents": 10000, "date": "2026-10-01", "note": null, "draft_id": null }`.
+Validation: `kind` default `transfer`; accounts distinct and writable; `card_settlement` requires `to` = credit card and `from` ≠ credit card; date rules as transactions.
+Effects: one DB transaction creates the transfer and both legs (origin = draft origin or `manual`). With `draft_id` (M3), the draft is confirmed as with transactions and attachments go to the `out` leg.
+Response 201 `{ "data": Transfer }`.
+
+#### `GET /api/v1/transfers/{id}` → 200 `{ "data": Transfer }`
+
+#### `PATCH /api/v1/transfers/{id}`
+
+Fields: `from_account_id`, `to_account_id`, `amount_cents`, `date`, `note`, `kind`. Both legs are rewritten in place atomically. 200.
+
+#### `DELETE /api/v1/transfers/{id}` → 204 (soft-deletes the transfer and both legs)
+
+#### `POST /api/v1/transfers/{id}/restore` → 200 `{ "data": Transfer }`
+
+### 3.9 Tags (M2)
+
+| Method | Path | Request | Response | Errors |
+|---|---|---|---|---|
+| GET | `/api/v1/tags?q=rom` | | 200 `{ data: [Tag] }` ordered by usage desc, max 50 | |
+| POST | `/api/v1/tags` | `{ "name": "viaje roma" }` | 201 `{ data: Tag }` (returns the existing tag with 200 if the name exists) | 422 |
+| PATCH | `/api/v1/tags/{id}` | `{ "name": "..." }` | 200 | 409 `tag_name_taken` |
+| DELETE | `/api/v1/tags/{id}` | | 204 (detaches from movements) | |
+
+Names are trimmed and lower-cased on save.
+
+### 3.10 Captures, drafts and attachments (M3)
+
+#### `POST /api/v1/captures` (RF-10, RF-11; throttle `captures`)
+
+Multipart form:
+
+| Field | Rules |
+|---|---|
+| `kind` | `voice` or `photo` |
+| `file` | voice: MIME in `config('finance.capture.audio_mimes')` (`audio/mp4`, `audio/x-m4a`, `audio/aac`, `audio/webm`, `audio/ogg`, `audio/mpeg`, `audio/wav`), ≤ 10 MB; photo: `image/jpeg`, `image/png`, `image/webp`, ≤ 8 MB |
+| `client_started_at` | Optional ISO timestamp (when the capture screen opened) |
+
+Processing is synchronous within `config('finance.capture.deadline_seconds')` (default 15). The file is stored on the private `receipts` disk and an `Attachment` is created. Voice is transcribed, then extracted; photo is extracted from the image. The output is sanitized server-side and a `pending` draft is created.
+Response **201 always when the upload is valid**, also when AI fails:
+
+```json
+{ "data": { "capture": Capture, "draft": Draft } }
+```
+
+On AI failure `capture.status = failed`, `capture.error` is a short message, `draft.proposal` holds only defaults (`date` today, `account_id` default account, `type` expense) and, for voice, `description` = transcript when the transcript exists. All non-default fields are listed in `low_confidence_fields`.
+Errors: 422 (MIME, size); 429.
+
+Sanitization rules (`App\Ai\SanitizeExtraction`):
+- Unknown, archived or wrong-kind `account_id`/`to_account_id`/`category_id` → null, confidence 0.
+- `amount_cents` ≤ 0 or > max → null, confidence 0.
+- `date` in the future → today, confidence 0.3. Missing date → today, source `default` (not flagged).
+- `type = transfer` without a valid `to_account_id` → `expense`, flagged.
+- Category kind conflicting with `type` → category null, flagged.
+- Missing account → default account, source `default`, flagged.
+- A field is low-confidence when its confidence < `config('finance.capture.low_confidence_threshold')` (0.7) or it was nulled by sanitization.
+
+#### `GET /api/v1/drafts?status=pending&origin[]=voice`
+
+`status` default `pending`. Paginated `Draft` list, newest first. `meta.total` drives the inbox badge.
+
+#### `GET /api/v1/drafts/{id}` → 200 `{ "data": Draft }`
+
+#### `POST /api/v1/drafts/{id}/discard`
+
+200 `{ "data": Draft }` with `status = discarded`. Deletes the capture's attachment files and rows immediately. For recurring drafts (M4) the occurrence becomes `skipped`. Errors: 409 `draft_not_pending`.
+
+Confirming a draft is `POST /transactions` or `POST /transfers` with `draft_id` (see above).
+
+#### `GET /api/v1/attachments/{id}`
+
+Streams the file with its `Content-Type`, `Content-Disposition: inline` (or `attachment` with `?download=1`), `X-Content-Type-Options: nosniff`, `Cache-Control: private, max-age=3600`. 401 when unauthenticated, 404 when unknown.
+
+#### `GET /api/v1/transactions/{id}/attachments` → 200 `{ "data": [Attachment] }`
+
+#### `POST /api/v1/transactions/{id}/attachments`
+
+Multipart `file` (same MIME/size rules as captures; kind inferred). Adds a receipt to an existing expense/income/transfer leg. 201 `{ "data": Attachment }`.
+
+#### `DELETE /api/v1/attachments/{id}`
+
+Deletes a receipt linked to a transaction (row and file). 204. Errors: 409 `attachment_not_deletable`.
+
+### 3.11 Recurring (M4)
+
+#### `GET /api/v1/recurring-templates?include_paused=1` → `{ "data": [RecurringTemplate] }`
+
+#### `POST /api/v1/recurring-templates`
+
+Request:
+
+```json
+{ "name": "Luz", "type": "expense", "amount_cents": 6000, "is_variable": true, "account_id": 3, "category_id": 21,
+  "frequency": "monthly", "day_of_month": 5, "starts_on": "2026-11-01", "ends_on": null,
+  "description": "Iberdrola", "merchant": "Iberdrola", "note": null }
+```
+
+Validation: kinds match; account writable; `day_of_month` 1..31; `starts_on` defaults to today. Response 201.
+
+#### `GET /api/v1/recurring-templates/{id}` → 200
+
+#### `PATCH /api/v1/recurring-templates/{id}`
+
+Any field except `type` after the template has occurrences (422). Changes affect only occurrences not yet generated. 200.
+
+#### `DELETE /api/v1/recurring-templates/{id}` → 204 (soft delete; generated movements stay; pending drafts of this template are discarded)
+
+#### `POST /api/v1/recurring-templates/{id}/pause` / `resume` → 200
+
+Resuming does not backfill slots whose due date fell while paused; they are recorded as `skipped`.
+
+#### `GET /api/v1/recurring/forecast?period=2026-10` (RF-22)
+
+`period` defaults to current.
+
+```json
+{ "data": {
+  "period": Period,
+  "items": [
+    { "template_id": 4, "template_name": "Luz", "type": "expense", "due_date": "2026-10-05", "amount_cents": 6000,
+      "is_variable": true, "status": "awaiting_amount", "draft_id": 91, "transaction_id": null }
+  ],
+  "pending_expense_cents": 6000,
+  "pending_income_cents": 0,
+  "posted_expense_cents": 85000,
+  "posted_income_cents": 210000
+} }
+```
+
+`status`: `upcoming` (slot in the period, not generated yet), `awaiting_amount` (variable draft pending), `posted`, `skipped`. Pending totals sum `upcoming` + `awaiting_amount` (template amount as estimate).
+
+### 3.12 Reports and dashboard (M5; budget report M6)
+
+All reports read only reportable rows (confirmed live expense/income). Periods come from `PeriodResolver`.
+
+#### `GET /api/v1/reports/summary?period=2026-10` (RF-30, RF-31)
+
+```json
+{ "data": {
+  "period": Period,
+  "income_cents": 210000,
+  "expense_cents": 157500,
+  "net_cents": 52500,
+  "savings_rate_bp": 2500,
+  "by_category": {
+    "expense": [
+      { "category_id": 10, "name": "Alimentación", "amount_cents": 42000, "share_bp": 2667, "own_cents": 2000,
+        "children": [ { "category_id": 11, "name": "Supermercado", "amount_cents": 40000, "share_bp": 2540 } ] }
+    ],
+    "income": [ ... ]
+  }
+} }
+```
+
+`savings_rate_bp` = round((income − expense) × 10000 / income) using integer math, null when income is 0; it can be negative. `share_bp` is the share of the kind total. `own_cents` is spend booked directly on the parent. Categories with zero amount are omitted.
+
+#### `GET /api/v1/reports/trend?periods=12&until=2026-10&category_id=10`
+
+`periods` 1..24 (default 12). Oldest first, zero-filled:
+
+```json
+{ "data": [ { "period": Period, "income_cents": 210000, "expense_cents": 157500, "savings_rate_bp": 2500, "category_cents": 42000 } ] }
+```
+
+`category_cents` is present only with `category_id` (parent includes children).
+
+#### `GET /api/v1/reports/net-worth?date=2026-10-13` (RF-32)
+
+```json
+{ "data": {
+  "date": "2026-10-13",
+  "total_cents": 1834500,
+  "assets_cents": 1879730,
+  "liabilities_cents": -45230,
+  "accounts": [ { "id": 3, "name": "BBVA", "type": "checking", "archived": false, "balance_cents": 234567, "last_updated_on": "2026-10-12", "stale": false } ]
+} }
+```
+
+#### `GET /api/v1/reports/capture-metrics?period=2026-10` (PRD metrics)
+
+```json
+{ "data": {
+  "period": Period,
+  "captures_confirmed": 34,
+  "median_seconds_to_confirm": 8.4,
+  "p90_seconds_to_confirm": 14.0,
+  "unedited_share_bp": 8235,
+  "active_days": 22,
+  "elapsed_days": 26,
+  "active_days_per_week": 5.9
+} }
+```
+
+Time to confirm = `drafts.confirmed_at − captures.client_started_at` (fallback `captures.created_at`). Unedited = confirmed capture drafts with empty `corrected_fields`. Active days = distinct Madrid dates of `created_at` of transactions with origin `manual|voice|photo` within the period's elapsed days. Seconds are the only non-integer outputs (display values, not money).
+
+#### `GET /api/v1/reports/budget-vs-actual?period=2026-10` (RF-33, M6)
+
+```json
+{ "data": {
+  "period": Period,
+  "items": [ { "category": CategorySummary, "budget_cents": 40000, "actual_cents": 42000, "remaining_cents": -2000, "used_bp": 10500, "status": "over" } ],
+  "budgeted_cents": 120000,
+  "actual_budgeted_cents": 98000,
+  "unbudgeted_actual_cents": 59500
+} }
+```
+
+`actual_cents` includes subcategories. `status`: `ok` (< 80 %), `warning` (80–100 %), `over` (> 100 %).
+
+### 3.13 Budgets (M6, RF-40)
+
+#### `GET /api/v1/budgets?period=2026-10`
+
+Every non-archived top-level expense category, with its effective budget for the period: `{ "data": [Budget] }`.
+
+#### `PUT /api/v1/budgets/{category_id}`
+
+Request: `{ "amount_cents": 40000, "effective_from": "2026-10" }` (`effective_from` defaults to the current period; `amount_cents` ≥ 0, 0 = stop budgeting). Upserts the `(category_id, effective_from)` row.
+Response 200 `{ "data": Budget }`. Errors: 422 when the category is not a top-level expense category.
+
+#### `GET /api/v1/budgets/{category_id}/history` → `{ "data": [ { "effective_from": "2026-07", "amount_cents": 40000 } ] }` (newest first)
+
+### 3.14 Suggestions (M7, RF-13)
+
+#### `GET /api/v1/suggestions/categorization?type=expense&merchant=Mercadona&description=`
+
+200 `{ "data": { "category_id": 11, "account_id": 7, "source": "history", "hits": 6 } }` or 204 when there is no hint. Lookup: exact normalized key (merchant first, then description), then the best trigram match with similarity ≥ 0.6.
+
+### 3.15 Export (M7, RF-50; throttle `exports`)
+
+#### `GET /api/v1/exports/transactions.csv?<same filters as GET /transactions>&delimiter=semicolon`
+
+Streamed CSV, UTF-8 with BOM, `delimiter` `semicolon` (default) or `comma`, CRLF line endings, RFC 4180 quoting, formula-injection guard (cells starting with `=`, `+`, `-`, `@`, tab or CR are prefixed with `'`, except the numeric `amount_cents` column). Every leg is exported (no transfer collapsing). Columns:
+
+`id; date; type; account; account_type; category; parent_category; amount_cents; amount_eur; description; merchant; note; tags; origin; transfer_id; transfer_kind; transfer_leg; counter_account; adjustment_target_cents; recurring_template; attachments_count; created_at`
+
+`amount_cents` is signed; `amount_eur` is signed with a comma decimal separator when the delimiter is `semicolon`, dot otherwise. `tags` are joined with `|`.
+
+#### `GET /api/v1/exports/full.zip`
+
+ZIP (built in a temp file, then streamed) containing `accounts.csv` (with current balance), `categories.csv`, `transactions.csv` (as above, unfiltered, including soft-deleted rows with a `deleted_at` column), `transfers.csv`, `tags.csv`, `recurring_templates.csv`, `budgets.csv`, `attachments.csv` (index: id, transaction_id, kind, mime, size, sha256, original_name), `settings.csv`. Receipt files are included under `receipts/` only with `?include_receipts=1`.
