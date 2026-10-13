@@ -11,6 +11,13 @@ import { UiToast } from '../../../shared/ui';
 import { anAccount } from '../../accounts/testing/account-fixtures';
 import { aTransaction } from '../testing/transaction-fixtures';
 import { TransactionEditSheet } from './transaction-edit-sheet';
+import { AttachmentsApi } from '../../../core/api/attachments.api';
+import { DraftsApi } from '../../../core/api/drafts.api';
+import {
+  anAttachment,
+  quietAttachmentsApi,
+  quietDraftsApi,
+} from '../../drafts/testing/draft-fixtures';
 
 const TREE: Category[] = [
   {
@@ -57,6 +64,8 @@ async function setup(transaction: Transaction) {
   };
   const view = await render(TransactionEditSheet, {
     providers: [
+      { provide: DraftsApi, useValue: quietDraftsApi() },
+      { provide: AttachmentsApi, useValue: quietAttachmentsApi([anAttachment()]) },
       { provide: TransactionsApi, useValue: api },
       { provide: AccountsApi, useValue: { list: () => of([anAccount({ id: 3, name: 'BBVA' })]) } },
       { provide: CategoriesApi, useValue: { list: () => of(TREE) } },
@@ -94,6 +103,17 @@ describe('TransactionEditSheet', () => {
       tags: ['casa', 'devolución'],
     });
     expect(closed).toHaveBeenCalled();
+  });
+
+  it('shows the receipts of the movement with a download link', async () => {
+    await setup(aTransaction({ attachments_count: 1 }));
+
+    expect(await screen.findByRole('heading', { name: 'Justificantes' })).toBeVisible();
+    expect(await screen.findByRole('link', { name: 'Descargar' })).toHaveAttribute(
+      'href',
+      '/api/v1/attachments/01JATTACHMENT0000000000001?download=1',
+    );
+    expect(screen.getByRole('button', { name: 'Añadir justificante' })).toBeVisible();
   });
 
   it('edits the target balance and date of an adjustment', async () => {

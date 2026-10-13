@@ -1,8 +1,14 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideArrowLeftRight, lucideFunnel, lucidePlus } from '@ng-icons/lucide';
+import {
+  lucideArrowLeftRight,
+  lucideChevronRight,
+  lucideFunnel,
+  lucideInbox,
+  lucidePlus,
+} from '@ng-icons/lucide';
 import { catchError, debounceTime, distinctUntilChanged, map, of, skip } from 'rxjs';
 import { PeriodsApi } from '../../../core/api/periods.api';
 import { Period, TransactionListQuery, TransactionTotals } from '../../../core/api/models';
@@ -11,6 +17,7 @@ import { formatPeriodLabel } from '../../../core/date/period-label';
 import { EurPipe } from '../../../core/money/eur.pipe';
 import { PageHeader } from '../../../shared/layout/page-header';
 import { UiButton, UiInput } from '../../../shared/ui';
+import { PendingDrafts } from '../../drafts/pending-drafts';
 import { MovementSheets } from '../movement-sheets';
 import { TransactionFeed } from './transaction-feed';
 import { TransactionFilterSheet } from './transaction-filter-sheet';
@@ -33,14 +40,40 @@ const PERIOD_HISTORY = 24;
     EurPipe,
     NgIcon,
     PageHeader,
+    RouterLink,
     TransactionFeed,
     TransactionFilterSheet,
     UiButton,
     UiInput,
   ],
-  providers: [provideIcons({ lucideArrowLeftRight, lucideFunnel, lucidePlus })],
+  providers: [
+    provideIcons({
+      lucideArrowLeftRight,
+      lucideChevronRight,
+      lucideFunnel,
+      lucideInbox,
+      lucidePlus,
+    }),
+  ],
   template: `
     <app-page-header title="Movimientos" />
+    @if (pendingCount() > 0) {
+      <a
+        routerLink="/pendientes"
+        class="mb-4 flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm font-medium text-foreground hover:bg-primary/10"
+        data-testid="pending-drafts-banner"
+      >
+        <ng-icon name="lucideInbox" size="20" class="text-primary" aria-hidden="true" />
+        <span class="flex-1">
+          {{
+            pendingCount() === 1
+              ? '1 borrador pendiente de revisar'
+              : pendingCount() + ' borradores pendientes de revisar'
+          }}
+        </span>
+        <ng-icon name="lucideChevronRight" class="text-muted-foreground" aria-hidden="true" />
+      </a>
+    }
     <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
       <div class="flex-1">
         <ui-input
@@ -112,6 +145,7 @@ export class TransactionsPage {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   protected readonly sheets = inject(MovementSheets);
+  protected readonly pendingCount = inject(PendingDrafts).count;
 
   protected readonly filtersOpen = signal(false);
   protected readonly totals = signal<TransactionTotals>({ income_cents: 0, expense_cents: 0 });

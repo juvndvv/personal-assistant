@@ -17,7 +17,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @property int $id
@@ -41,6 +44,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property-read Category|null $category
  * @property-read Transfer|null $transfer
  * @property-read Collection<int, Tag> $tags
+ * @property-read Collection<int, Attachment> $attachments
+ * @property-read int|null $attachments_count
  */
 #[Fillable([
     'type', 'account_id', 'amount_cents', 'date', 'category_id', 'description', 'merchant', 'note',
@@ -92,6 +97,47 @@ final class Transaction extends Model
         return $this->belongsToMany(Tag::class);
     }
 
+    /**
+     * @return HasMany<Attachment, $this>
+     */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(Attachment::class);
+    }
+
+    /**
+     * @return Builder<Attachment>
+     */
+    public function receipts(): Builder
+    {
+        return Attachment::query()->whereIn(
+            'transaction_id',
+            $this->transfer_id === null
+                ? [$this->id]
+                : self::withTrashed()->where('transfer_id', $this->transfer_id)->select('id'),
+        );
+    }
+
+    public function loadReceiptsCount(): self
+    {
+        $this->setAttribute('attachments_count', $this->receipts()->count());
+
+        return $this;
+    }
+
+    public static function correlatedReceipts(): QueryBuilder
+    {
+        return DB::table('attachments')->where(function (QueryBuilder $owners): void {
+            $owners->whereColumn('attachments.transaction_id', 'transactions.id')
+                ->orWhereIn('attachments.transaction_id', function (QueryBuilder $legs): void {
+                    $legs->select('transfer_legs.id')
+                        ->from('transactions', 'transfer_legs')
+                        ->whereNotNull('transactions.transfer_id')
+                        ->whereColumn('transfer_legs.transfer_id', 'transactions.transfer_id');
+                });
+        });
+    }
+
     public function magnitudeCents(): int
     {
         return abs($this->amount_cents);
@@ -104,6 +150,19 @@ final class Transaction extends Model
     protected function reportable(Builder $query): void
     {
         $query->whereIn('type', [TransactionType::Expense->value, TransactionType::Income->value]);
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function withReceiptsCount(Builder $query): void
+    {
+        if ($query->getQuery()->columns === null) {
+            $query->select('transactions.*');
+        }
+
+        $query->selectSub(self::correlatedReceipts()->selectRaw('count(*)'), 'attachments_count');
     }
 
     /**

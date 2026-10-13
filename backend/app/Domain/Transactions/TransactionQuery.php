@@ -68,8 +68,8 @@ final class TransactionQuery
             $query->whereRaw('abs(transactions.amount_cents) <= ?', [$filters->amountMaxCents]);
         }
 
-        if ($filters->hasAttachments === true) {
-            $query->whereRaw('false');
+        if ($filters->hasAttachments !== null) {
+            $query->addWhereExistsQuery(Transaction::correlatedReceipts()->selectRaw('1'), 'and', ! $filters->hasAttachments);
         }
 
         return $query;

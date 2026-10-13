@@ -4,6 +4,7 @@ export interface NavItem {
   icon: string;
   exact: boolean;
   primary: boolean;
+  showsPendingDrafts?: boolean;
 }
 
 export const NAV_ITEMS: readonly NavItem[] = [
@@ -14,6 +15,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: 'lucideArrowLeftRight',
     exact: false,
     primary: false,
+    showsPendingDrafts: true,
   },
   {
     path: '/capturar',

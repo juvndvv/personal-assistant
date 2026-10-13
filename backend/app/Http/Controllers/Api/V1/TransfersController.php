@@ -27,6 +27,7 @@ final class TransfersController extends Controller
             date: $request->movementDate(),
             kind: $request->kind(),
             note: $request->note(),
+            draftId: $request->draftId(),
         );
 
         return $this->resource($transfer)->response()->setStatusCode(Response::HTTP_CREATED);

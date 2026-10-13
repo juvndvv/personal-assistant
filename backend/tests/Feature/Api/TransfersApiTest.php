@@ -177,7 +177,7 @@ it('validates transfers', function (array $overrides, string $field): void {
     'date more than a year ahead' => [['date' => '2027-10-15'], 'date'],
     'settlement to a non-card' => [['kind' => 'card_settlement'], 'to_account_id'],
     'settlement from a card' => [['kind' => 'card_settlement', 'from_account_id' => 'card', 'to_account_id' => 'checking'], 'to_account_id'],
-    'draft before drafts exist' => [['draft_id' => 3], 'draft_id'],
+    'unknown draft' => [['draft_id' => 3], 'draft_id'],
 ]);
 
 it('rejects a card settlement paid from another card', function (): void {

@@ -13,6 +13,9 @@ import { todayInMadrid } from '../../core/date/iso-date';
 import { UiToast } from '../../shared/ui';
 import { AccountDetailPage } from './account-detail.page';
 import { anAccount } from './testing/account-fixtures';
+import { AttachmentsApi } from '../../core/api/attachments.api';
+import { DraftsApi } from '../../core/api/drafts.api';
+import { quietAttachmentsApi, quietDraftsApi } from '../drafts/testing/draft-fixtures';
 
 function anAdjustment(signed: number, target: number): Transaction {
   return {
@@ -52,6 +55,8 @@ async function setup(account: Account = anAccount({ id: 1, balance_cents: 100000
   };
   const view = await render(AccountDetailPage, {
     providers: [
+      { provide: DraftsApi, useValue: quietDraftsApi() },
+      { provide: AttachmentsApi, useValue: quietAttachmentsApi() },
       provideRouter([]),
       { provide: AccountsApi, useValue: api },
       { provide: CategoriesApi, useValue: { list: () => of([]) } },

@@ -4,6 +4,7 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideChevronRight,
   lucideFolderTree,
+  lucideInbox,
   lucideSettings,
   lucideTags,
   lucideWallet,
@@ -20,6 +21,12 @@ interface MoreLink {
 }
 
 const MORE_LINKS: readonly MoreLink[] = [
+  {
+    path: '/pendientes',
+    label: 'Pendientes',
+    description: 'Borradores de voz y foto por revisar.',
+    icon: 'lucideInbox',
+  },
   {
     path: '/cuentas',
     label: 'Cuentas',
@@ -53,6 +60,7 @@ const MORE_LINKS: readonly MoreLink[] = [
     provideIcons({
       lucideChevronRight,
       lucideFolderTree,
+      lucideInbox,
       lucideSettings,
       lucideTags,
       lucideWallet,

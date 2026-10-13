@@ -67,6 +67,22 @@ function floatTypeDeclarationsIn(string $path): array
     return $violations;
 }
 
+/**
+ * @return list<int>
+ */
+function providerModelLiteralLines(string $code): array
+{
+    $lines = [];
+
+    foreach (PhpToken::tokenize($code) as $token) {
+        if ($token->id === T_CONSTANT_ENCAPSED_STRING && preg_match('/gpt-|whisper|o4-|claude-|gemini-/i', $token->text) === 1) {
+            $lines[] = $token->line;
+        }
+    }
+
+    return $lines;
+}
+
 arch('every file declares strict types')
     ->expect('App')
     ->toUseStrictTypes();
@@ -134,12 +150,23 @@ it('never hardcodes AI provider model names in application code', function (): v
     $violations = [];
 
     foreach (phpFilesIn('app') as $file) {
-        foreach (PhpToken::tokenize((string) file_get_contents($file)) as $token) {
-            if ($token->id === T_CONSTANT_ENCAPSED_STRING && preg_match('/gpt-|whisper|o4-|claude-|gemini-/i', $token->text) === 1) {
-                $violations[] = $file.':'.$token->line;
-            }
+        foreach (providerModelLiteralLines((string) file_get_contents($file)) as $line) {
+            $violations[] = $file.':'.$line;
         }
     }
 
     expect($violations)->toBe([]);
+});
+
+arch('agents never pin a provider or model with attributes')
+    ->expect('App\\Ai')
+    ->not->toUse([
+        'Laravel\\Ai\\Attributes\\Provider',
+        'Laravel\\Ai\\Attributes\\Model',
+        'Laravel\\Ai\\Attributes\\UseCheapestModel',
+        'Laravel\\Ai\\Attributes\\UseSmartestModel',
+    ]);
+
+it('detects provider model literals', function (): void {
+    expect(providerModelLiteralLines("<?php\n\$model = 'gpt-6-luna';\n\$stt = \"whisper-1\";\n// gpt-4 in a comment\n"))->toBe([2, 3]);
 });

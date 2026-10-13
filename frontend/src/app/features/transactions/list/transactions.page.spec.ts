@@ -17,6 +17,9 @@ import { MovementSheets } from '../movement-sheets';
 import { aPage } from '../testing/feed-fakes';
 import { aTransaction, aTransferLeg } from '../testing/transaction-fixtures';
 import { TransactionsPage } from './transactions.page';
+import { AttachmentsApi } from '../../../core/api/attachments.api';
+import { DraftsApi } from '../../../core/api/drafts.api';
+import { quietAttachmentsApi, quietDraftsApi } from '../../drafts/testing/draft-fixtures';
 
 const PERIODS: Period[] = [
   { label: '2026-09', start: '2026-08-25', end: '2026-09-24', month_start_day: 25 },
@@ -51,6 +54,8 @@ async function setup(url = '/movimientos') {
   const toast = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
   TestBed.configureTestingModule({
     providers: [
+      { provide: DraftsApi, useValue: quietDraftsApi() },
+      { provide: AttachmentsApi, useValue: quietAttachmentsApi() },
       provideRouter([{ path: 'movimientos', component: TransactionsPage }]),
       { provide: TransactionsApi, useValue: transactionsApi },
       { provide: TransfersApi, useValue: transfersApi },

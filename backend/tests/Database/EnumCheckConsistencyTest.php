@@ -3,7 +3,13 @@
 declare(strict_types=1);
 
 use App\Enums\AccountType;
+use App\Enums\AttachmentKind;
+use App\Enums\CaptureKind;
+use App\Enums\CaptureStatus;
 use App\Enums\CategoryKind;
+use App\Enums\DraftOrigin;
+use App\Enums\DraftStatus;
+use App\Enums\DraftType;
 use App\Enums\TransactionOrigin;
 use App\Enums\TransactionType;
 use App\Enums\TransferKind;
@@ -43,4 +49,10 @@ it('mirrors every enum case in its CHECK constraint', function (string $enum, st
     'transaction origin' => [TransactionOrigin::class, 'transactions_origin_check'],
     'transfer kind' => [TransferKind::class, 'transfers_kind_check'],
     'transfer leg' => [TransferLeg::class, 'transactions_transfer_leg_check'],
+    'capture kind' => [CaptureKind::class, 'captures_kind_check'],
+    'capture status' => [CaptureStatus::class, 'captures_status_check'],
+    'draft origin' => [DraftOrigin::class, 'drafts_origin_check'],
+    'draft status' => [DraftStatus::class, 'drafts_status_check'],
+    'draft type' => [DraftType::class, 'drafts_type_check'],
+    'attachment kind' => [AttachmentKind::class, 'attachments_kind_check'],
 ]);

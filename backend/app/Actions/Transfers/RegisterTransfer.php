@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Actions\Transfers;
 
+use App\Actions\Drafts\ConfirmDraft;
 use App\Domain\Ledger\MovementRules;
+use App\Enums\DraftOrigin;
 use App\Enums\TransactionOrigin;
 use App\Enums\TransactionType;
 use App\Enums\TransferKind;
@@ -19,7 +21,10 @@ use Illuminate\Validation\ValidationException;
 
 final readonly class RegisterTransfer
 {
-    public function __construct(private TransferAccounts $transferAccounts) {}
+    public function __construct(
+        private TransferAccounts $transferAccounts,
+        private ConfirmDraft $confirmDraft,
+    ) {}
 
     /**
      * @param  (Closure(Transfer): void)|null  $withinTransaction
@@ -33,12 +38,20 @@ final readonly class RegisterTransfer
         ?string $note = null,
         TransactionOrigin $origin = TransactionOrigin::Manual,
         ?Closure $withinTransaction = null,
+        ?int $draftId = null,
     ): Transfer {
         if ($amountCents < 1 || $amountCents > MovementRules::MAX_MAGNITUDE_CENTS) {
             throw ValidationException::withMessages(['amount_cents' => 'El importe no es válido.']);
         }
 
-        return DB::transaction(function () use ($fromAccountId, $toAccountId, $amountCents, $date, $kind, $note, $origin, $withinTransaction): Transfer {
+        return DB::transaction(function () use ($fromAccountId, $toAccountId, $amountCents, $date, $kind, $note, $origin, $withinTransaction, $draftId): Transfer {
+            $draft = $draftId === null ? null : $this->confirmDraft->lockPending($draftId);
+
+            if ($draft?->origin === DraftOrigin::Recurring) {
+                throw ValidationException::withMessages(['draft_id' => 'Un borrador de un movimiento fijo no puede confirmarse como transferencia.']);
+            }
+
+            $origin = $draft?->origin->transactionOrigin() ?? $origin;
             $date = ($date ?? CarbonImmutable::today())->startOfDay();
             [$from, $to] = $this->transferAccounts->handle($kind, $fromAccountId, $toAccountId, $date);
 
@@ -57,6 +70,10 @@ final readonly class RegisterTransfer
             $transfer->setRelation('fromAccount', $from);
             $transfer->setRelation('toAccount', $to);
             $transfer->setRelation('legs', $transfer->newCollection([$out, $in]));
+
+            if ($draft !== null) {
+                $this->confirmDraft->handle($draft, transfer: $transfer);
+            }
 
             if ($withinTransaction !== null) {
                 $withinTransaction($transfer);

@@ -11,6 +11,13 @@ import { anAccount } from '../accounts/testing/account-fixtures';
 import { TransferRequest } from '../transactions/movement-sheets';
 import { aTransfer } from '../transactions/testing/transaction-fixtures';
 import { TransferFormSheet } from './transfer-form-sheet';
+import { AttachmentsApi } from '../../core/api/attachments.api';
+import { DraftsApi } from '../../core/api/drafts.api';
+import {
+  anAttachment,
+  quietAttachmentsApi,
+  quietDraftsApi,
+} from '../drafts/testing/draft-fixtures';
 
 const knownAccounts = (): Observable<Account[]> =>
   of([
@@ -25,6 +32,7 @@ async function setup(
   request: TransferRequest,
   existing: Transfer = aTransfer({ note: 'Hucha' }),
   listAccounts: () => Observable<Account[]> = knownAccounts,
+  attachments: ReturnType<typeof quietAttachmentsApi> = quietAttachmentsApi(),
 ) {
   const api = {
     get: vi.fn(() => of(existing)),
@@ -35,6 +43,8 @@ async function setup(
   };
   const view = await render(TransferFormSheet, {
     providers: [
+      { provide: DraftsApi, useValue: quietDraftsApi() },
+      { provide: AttachmentsApi, useValue: attachments },
       { provide: TransfersApi, useValue: api },
       {
         provide: AccountsApi,
@@ -125,6 +135,37 @@ describe('TransferFormSheet', () => {
       date: '2026-10-01',
       note: 'Hucha',
     });
+  });
+
+  it('shows the receipts of an existing transfer from its out leg', async () => {
+    const attachments = quietAttachmentsApi([anAttachment()]);
+    const listForTransaction = vi.spyOn(attachments, 'listForTransaction');
+    await setup(
+      { transferId: 44, fromAccountId: null },
+      aTransfer({ out_transaction_id: 501, in_transaction_id: 502 }),
+      knownAccounts,
+      attachments,
+    );
+    await screen.findByRole('dialog', { name: 'Editar transferencia' });
+
+    expect(await screen.findByRole('heading', { name: 'Justificantes' })).toBeVisible();
+    expect(await screen.findByRole('link', { name: 'Descargar' })).toHaveAttribute(
+      'href',
+      '/api/v1/attachments/01JATTACHMENT0000000000001?download=1',
+    );
+    expect(listForTransaction).toHaveBeenCalledTimes(1);
+    expect(listForTransaction).toHaveBeenCalledWith(501);
+  });
+
+  it('shows no receipts section while creating a transfer', async () => {
+    const attachments = quietAttachmentsApi([anAttachment()]);
+    const listForTransaction = vi.spyOn(attachments, 'listForTransaction');
+    await setup({ transferId: null, fromAccountId: 3 }, aTransfer(), knownAccounts, attachments);
+    await screen.findByRole('dialog', { name: 'Nueva transferencia' });
+
+    expect(screen.queryByRole('heading', { name: 'Justificantes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Descargar' })).not.toBeInTheDocument();
+    expect(listForTransaction).not.toHaveBeenCalled();
   });
 
   it('reclassifies an edited transfer that now pays off a card as a card settlement', async () => {

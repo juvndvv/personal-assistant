@@ -39,6 +39,18 @@ export const routes: Routes = [
         loadComponent: () => import('./features/capture/capture.page').then((m) => m.CapturePage),
       },
       {
+        path: 'pendientes',
+        title: 'Pendientes · Finanzas',
+        loadComponent: () =>
+          import('./features/drafts/inbox/draft-inbox.page').then((m) => m.DraftInboxPage),
+      },
+      {
+        path: 'pendientes/:id',
+        title: 'Revisar borrador · Finanzas',
+        loadComponent: () =>
+          import('./features/drafts/review/draft-review.page').then((m) => m.DraftReviewPage),
+      },
+      {
         path: 'informes',
         title: 'Informes · Finanzas',
         loadComponent: () => import('./features/reports/reports.page').then((m) => m.ReportsPage),

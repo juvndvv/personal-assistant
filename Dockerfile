@@ -35,7 +35,7 @@ WORKDIR /app
 COPY --chown=app:app --from=vendor /app /app
 COPY --chown=app:app --from=frontend-build /src/dist/frontend/browser /app/public/app
 USER app
-RUN mkdir -p storage/app/private storage/app/public storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+RUN mkdir -p storage/app/private/receipts storage/app/public storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
     && php artisan package:discover --ansi
 EXPOSE 80 443 443/udp
 ENTRYPOINT ["app-entrypoint"]

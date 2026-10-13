@@ -6,6 +6,7 @@ namespace App\Actions\Categories;
 
 use App\Exceptions\DomainConflict;
 use App\Models\Category;
+use App\Models\Draft;
 use Illuminate\Support\Facades\DB;
 
 final class DeleteCategory
@@ -20,7 +21,7 @@ final class DeleteCategory
                 );
             }
 
-            if ($category->transactions()->withTrashed()->exists()) {
+            if ($category->transactions()->withTrashed()->exists() || Draft::query()->pending()->where('category_id', $category->id)->exists()) {
                 throw new DomainConflict(
                     'category_in_use',
                     'La categoría está en uso. Archívala en su lugar.',

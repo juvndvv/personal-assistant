@@ -9,6 +9,9 @@ import { aPage } from '../transactions/testing/feed-fakes';
 import { aTransaction, aTransferLeg } from '../transactions/testing/transaction-fixtures';
 import { anAccount } from '../accounts/testing/account-fixtures';
 import { HomePage } from './home.page';
+import { AttachmentsApi } from '../../core/api/attachments.api';
+import { DraftsApi } from '../../core/api/drafts.api';
+import { quietAttachmentsApi, quietDraftsApi } from '../drafts/testing/draft-fixtures';
 
 async function setup(accounts: Account[]) {
   const list = vi.fn(() => of(accounts));
@@ -17,6 +20,8 @@ async function setup(accounts: Account[]) {
   };
   const view = await render(HomePage, {
     providers: [
+      { provide: DraftsApi, useValue: quietDraftsApi() },
+      { provide: AttachmentsApi, useValue: quietAttachmentsApi() },
       provideRouter([]),
       { provide: AccountsApi, useValue: { list } },
       { provide: TransactionsApi, useValue: transactions },

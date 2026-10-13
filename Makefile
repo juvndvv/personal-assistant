@@ -17,7 +17,7 @@ COMPOSE_PROD := docker compose -f compose.yaml -f compose.prod.yaml
 BACKEND_TEST_ENV := DB_HOST=127.0.0.1 DB_PORT=$(DB_HOST_PORT) DB_USERNAME=$(DB_USERNAME) DB_PASSWORD=$(DB_PASSWORD)
 
 .PHONY: help env install up down logs ps config lint lint-pins lint-backend lint-frontend \
-	test test-backend test-frontend build build-frontend build-image e2e user trust-ca verify-ledger
+	test test-backend test-frontend build build-frontend build-image smoke e2e user trust-ca verify-ledger
 
 help:
 	@grep -hE '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -45,6 +45,8 @@ ps: ## Show service status
 config: ## Validate the dev and prod compose configurations
 	$(COMPOSE) config --quiet
 	APP_IMAGE=$(or $(APP_IMAGE),$(RUNTIME_IMAGE)) $(COMPOSE_PROD) config --quiet
+	scripts/check-compose-env.sh
+	APP_IMAGE=$(or $(APP_IMAGE),$(RUNTIME_IMAGE)) scripts/check-compose-env.sh -f compose.yaml -f compose.prod.yaml
 
 lint: lint-pins lint-backend lint-frontend ## Run every linter
 
@@ -74,6 +76,9 @@ build-frontend:
 
 build-image:
 	docker build --target runtime -t $(RUNTIME_IMAGE) .
+
+smoke: ## Runtime smoke checks against the running stack (E2E_BASE_URL)
+	E2E_BASE_URL=$(E2E_BASE_URL) scripts/smoke.sh
 
 e2e: ## Playwright journeys against the running stack (E2E_BASE_URL)
 	cd frontend && E2E_BASE_URL=$(E2E_BASE_URL) npx playwright test

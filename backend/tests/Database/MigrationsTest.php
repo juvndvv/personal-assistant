@@ -17,7 +17,7 @@ function ledgerMigrations(): array
 }
 
 it('rolls the ledger migrations back and forth on the same connection', function (): void {
-    $ledgerTables = ['settings', 'accounts', 'categories', 'transfers', 'transactions', 'tags', 'tag_transaction'];
+    $ledgerTables = ['settings', 'accounts', 'categories', 'transfers', 'transactions', 'tags', 'tag_transaction', 'captures', 'drafts', 'attachments'];
     $migrations = ledgerMigrations();
 
     foreach (array_reverse($migrations) as $migration) {

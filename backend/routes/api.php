@@ -3,8 +3,11 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\AccountsController;
+use App\Http\Controllers\Api\V1\AttachmentsController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\CapturesController;
 use App\Http\Controllers\Api\V1\CategoriesController;
+use App\Http\Controllers\Api\V1\DraftsController;
 use App\Http\Controllers\Api\V1\PeriodsController;
 use App\Http\Controllers\Api\V1\QuickAddController;
 use App\Http\Controllers\Api\V1\SettingsController;
@@ -55,4 +58,21 @@ Route::middleware('auth:sanctum')->group(function (): void {
         ->name('transfers.restore');
 
     Route::apiResource('tags', TagsController::class)->except(['show']);
+
+    Route::post('captures', [CapturesController::class, 'store'])
+        ->middleware('throttle:captures')
+        ->name('captures.store');
+
+    Route::get('drafts', [DraftsController::class, 'index'])->name('drafts.index');
+    Route::get('drafts/{draft}', [DraftsController::class, 'show'])->whereNumber('draft')->name('drafts.show');
+    Route::post('drafts/{draft}/discard', [DraftsController::class, 'discard'])->whereNumber('draft')->name('drafts.discard');
+
+    Route::get('transactions/{transaction}/attachments', [AttachmentsController::class, 'index'])
+        ->whereNumber('transaction')
+        ->name('transactions.attachments.index');
+    Route::post('transactions/{transaction}/attachments', [AttachmentsController::class, 'store'])
+        ->whereNumber('transaction')
+        ->name('transactions.attachments.store');
+    Route::get('attachments/{attachment}', [AttachmentsController::class, 'show'])->name('attachments.show');
+    Route::delete('attachments/{attachment}', [AttachmentsController::class, 'destroy'])->name('attachments.destroy');
 });

@@ -140,6 +140,14 @@ return [
             'driver' => 'openai-compatible',
             'url' => env('OPENAI_COMPATIBLE_URL'),
             'key' => env('OPENAI_COMPATIBLE_API_KEY'),
+            'models' => [
+                'text' => [
+                    'default' => env('OPENAI_COMPATIBLE_TEXT_MODEL'),
+                ],
+                'transcription' => [
+                    'default' => env('OPENAI_COMPATIBLE_TRANSCRIPTION_MODEL'),
+                ],
+            ],
         ],
 
         'openrouter' => [
@@ -166,11 +174,11 @@ return [
     'finance' => [
         'extraction' => [
             'provider' => env('AI_EXTRACTION_PROVIDER', 'openai'),
-            'model' => env('AI_EXTRACTION_MODEL'),
+            'model' => env('AI_EXTRACTION_MODEL') ?: null,
         ],
         'transcription' => [
             'provider' => env('AI_TRANSCRIPTION_PROVIDER', 'openai'),
-            'model' => env('AI_TRANSCRIPTION_MODEL'),
+            'model' => env('AI_TRANSCRIPTION_MODEL') ?: null,
         ],
         'timeout_seconds' => (int) env('AI_TIMEOUT', 12),
         'failover' => array_values(array_filter(array_map(

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Transactions;
 
+use App\Actions\Drafts\ConfirmDraft;
 use App\Actions\QuickAdd\QuickAddDefaults;
 use App\Actions\Tags\SyncTransactionTags;
 use App\Domain\Ledger\MovementRules;
@@ -24,6 +25,7 @@ final readonly class RegisterTransaction
         private MovementRules $rules,
         private QuickAddDefaults $quickAddDefaults,
         private SyncTransactionTags $syncTags,
+        private ConfirmDraft $confirmDraft,
     ) {}
 
     /**
@@ -42,6 +44,7 @@ final readonly class RegisterTransaction
         array $tags = [],
         TransactionOrigin $origin = TransactionOrigin::Manual,
         ?Closure $withinTransaction = null,
+        ?int $draftId = null,
     ): Transaction {
         $kind = self::categoryKindFor($type);
 
@@ -49,7 +52,10 @@ final readonly class RegisterTransaction
             throw ValidationException::withMessages(['amount_cents' => 'El importe no es válido.']);
         }
 
-        return DB::transaction(function () use ($type, $kind, $amountCents, $categoryId, $date, $accountId, $description, $merchant, $note, $tags, $origin, $withinTransaction): Transaction {
+        return DB::transaction(function () use ($type, $kind, $amountCents, $categoryId, $date, $accountId, $description, $merchant, $note, $tags, $origin, $withinTransaction, $draftId): Transaction {
+            $draft = $draftId === null ? null : $this->confirmDraft->lockPending($draftId);
+            $origin = $draft?->origin->transactionOrigin() ?? $origin;
+
             $accountId ??= $this->quickAddDefaults->defaultAccountId()
                 ?? throw ValidationException::withMessages(['account_id' => 'Crea una cuenta antes de registrar movimientos.']);
 
@@ -76,6 +82,10 @@ final readonly class RegisterTransaction
                 'last_used_account_id' => $account->id,
                 'updated_at' => CarbonImmutable::now(),
             ]);
+
+            if ($draft !== null) {
+                $this->confirmDraft->handle($draft, transaction: $transaction);
+            }
 
             if ($withinTransaction !== null) {
                 $withinTransaction($transaction);

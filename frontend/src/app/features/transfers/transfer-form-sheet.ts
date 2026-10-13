@@ -27,11 +27,22 @@ import {
 import { EntryErrors, entryErrorsFrom, optionalText } from '../transactions/entry-errors';
 import { MovementActions } from '../transactions/movement-actions';
 import { MovementSheets, TransferRequest } from '../transactions/movement-sheets';
+import { ReceiptsGallery } from '../transactions/receipts/receipts-gallery';
 import { LedgerReferenceData } from '../transactions/reference-data';
+import { transferKindBetween } from './transfer-kind';
 
 @Component({
   selector: 'app-transfer-form-sheet',
-  imports: [UiButton, UiDateInput, UiInput, UiMoneyInput, UiSelect, UiSheet, UiSheetFooter],
+  imports: [
+    ReceiptsGallery,
+    UiButton,
+    UiDateInput,
+    UiInput,
+    UiMoneyInput,
+    UiSelect,
+    UiSheet,
+    UiSheetFooter,
+  ],
   template: `
     <ui-sheet
       [open]="request() !== null"
@@ -86,6 +97,11 @@ import { LedgerReferenceData } from '../transactions/reference-data';
         />
         <ui-input label="Nota" name="note" [maxlength]="1000" [(value)]="note" />
       </form>
+      @if (outLegId(); as legId) {
+        <div class="border-t border-border pt-4 pb-2">
+          <app-receipts-gallery [transactionId]="legId" />
+        </div>
+      }
       <div uiSheetFooter class="flex flex-col gap-2">
         <ui-button [fullWidth]="true" [loading]="saving()" (clicked)="submit($event)">
           {{ editing() ? 'Guardar cambios' : 'Guardar transferencia' }}
@@ -121,6 +137,7 @@ export class TransferFormSheet {
   private readonly attempted = signal(false);
 
   protected readonly editing = computed(() => this.request()?.transferId != null);
+  protected readonly outLegId = computed(() => this.existing()?.out_transaction_id ?? null);
   protected readonly title = computed(() => {
     if (!this.editing()) {
       return 'Nueva transferencia';
@@ -260,7 +277,7 @@ export class TransferFormSheet {
     if (from === undefined || to === undefined) {
       return null;
     }
-    return to === 'credit_card' && from !== 'credit_card' ? 'card_settlement' : 'transfer';
+    return transferKindBetween(from, to);
   }
 
   private accountTypeOf(accountId: number): AccountType | undefined {

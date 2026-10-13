@@ -468,7 +468,7 @@ Query parameters (all optional, combined with AND; multi-value parameters OR wit
 Transfer collapsing: without `account_id[]`, each transfer appears once (its `out` leg, with `counter_account`). With `account_id[]`, the legs on the selected accounts are returned.
 Response 200 paginated `Transaction` list, plus `meta.totals`: `{ "income_cents": 0, "expense_cents": 0 }` over the whole filtered set (reportable rows only). Both totals are unsigned magnitudes.
 
-Details (M2): `q` is matched literally (`%` and `_` are not wildcards) and must be valid UTF-8; transfer legs carry the transfer's `note`, so `q` also finds transfers. `amount`/`-amount` sort on the magnitude (ties by `-id`). `period` must be a valid label. `date_to` before `date_from`, `amount_max_cents` below `amount_min_cents`, or `per_page` outside 1..100 return 422. Until attachments exist (M3), `has_attachments=1` returns no rows and `has_attachments=0` filters nothing.
+Details (M2): `q` is matched literally (`%` and `_` are not wildcards) and must be valid UTF-8; transfer legs carry the transfer's `note`, so `q` also finds transfers. `amount`/`-amount` sort on the magnitude (ties by `-id`). `period` must be a valid label. `date_to` before `date_from`, `amount_max_cents` below `amount_min_cents`, or `per_page` outside 1..100 return 422. From M3, `has_attachments=1` returns rows with at least one receipt and `has_attachments=0` rows without any; `attachments_count` is the number of receipts linked to the row.
 
 #### `POST /api/v1/transactions` (RF-02; draft confirm from M3)
 
@@ -587,6 +587,17 @@ Sanitization rules (`App\Ai\SanitizeExtraction`):
 200 `{ "data": Draft }` with `status = discarded`. Deletes the capture's attachment files and rows immediately. For recurring drafts (M4) the occurrence becomes `skipped`. Errors: 409 `draft_not_pending`.
 
 Confirming a draft is `POST /transactions` or `POST /transfers` with `draft_id` (see above).
+
+Details (M3):
+- Upload MIME: the type detected from the file content must be in the configured list. For voice, containers that `finfo` reports differently are mapped to their audio type (`video/mp4` and `audio/m4a` → `audio/mp4`, `video/webm` → `audio/webm`, `application/ogg` → `audio/ogg`, `audio/x-wav` → `audio/wav`, `audio/mp3` → `audio/mpeg`, `audio/x-hx-aac-adts` → `audio/aac`); when detection only yields `application/octet-stream`, the client MIME is used if it is in the list. Photos must be detected as one of the image types. The stored `mime` is the resolved type.
+- `draft_id` pointing to no draft returns 422 `errors.draft_id`; an existing draft that is not `pending` returns 409 `draft_not_pending`. A recurring draft (M4) cannot be confirmed through `POST /transfers` (422 `errors.draft_id`).
+- `corrected_fields` lists the proposal fields whose confirmed value differs from the proposal, compared on the stored row (`date` and `account_id` after defaults, texts trimmed): `type`, `amount_cents`, `date`, `account_id`, `category_id`, `description`, `merchant` for transactions (plus `to_account_id` when the proposal had one); `type`, `amount_cents`, `date`, `account_id` (from), `to_account_id` for transfers. Unedited confirmations store `[]`.
+- `confidence` has a value for every non-null proposal field and `0` for fields nulled by sanitization; `field_sources` lists only non-null fields. A missing date gets confidence 1 (`default`, not flagged); an unparseable date becomes today, `default`, flagged.
+- On AI failure `low_confidence_fields` is `["amount_cents", "category_id", "description", "merchant"]`; `type` (`expense`), `date` (today) and `account_id` (default account) are `default` and not flagged.
+- `GET /attachments/{id}` also serves the file of a pending capture so the review screen can show the photo or play the audio. Unknown or malformed ULIDs return 404.
+- `POST /transactions/{id}/attachments` on an `adjustment` row returns 422 `errors.file`. Soft-deleted movements keep their receipts (the routes return 404 for the movement itself, as with every soft-deleted resource).
+- `GET /drafts` validates `status` (`pending|confirmed|discarded`), `origin[]` and `per_page` (1..100) with 422.
+- Category deletion returns 409 `category_in_use` while a pending draft references the category.
 
 #### `GET /api/v1/attachments/{id}`
 

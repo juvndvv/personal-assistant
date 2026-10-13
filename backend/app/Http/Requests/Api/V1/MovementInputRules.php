@@ -59,11 +59,7 @@ final class MovementInputRules
      */
     public static function draftId(): array
     {
-        return ['sometimes', 'nullable', 'integer', function (string $attribute, mixed $value, Closure $fail): void {
-            if ($value !== null) {
-                $fail('El borrador no existe o ya no está pendiente.');
-            }
-        }];
+        return ['sometimes', 'nullable', 'integer', 'min:1'];
     }
 
     public static function validUtf8(): Closure

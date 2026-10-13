@@ -22,6 +22,8 @@ final readonly class LedgerVerifier
             ...$this->miscategorizedMovements(),
             ...$this->movementsBeforeOpening(),
             ...$this->balanceMismatches(),
+            ...$this->danglingConfirmedDrafts(),
+            ...$this->orphanAttachments(),
         ];
     }
 
@@ -154,6 +156,54 @@ final readonly class LedgerVerifier
         }
 
         return $violations;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function danglingConfirmedDrafts(): array
+    {
+        $rows = DB::select(<<<'SQL'
+            SELECT d.id
+            FROM drafts d
+            LEFT JOIN transactions x ON x.id = d.transaction_id
+            LEFT JOIN transfers t ON t.id = d.transfer_id
+            WHERE d.status = 'confirmed' AND x.id IS NULL AND t.id IS NULL
+            ORDER BY d.id
+            SQL);
+
+        return array_values(array_map(
+            fn (stdClass $row): string => sprintf(
+                'Confirmed draft %d does not point to a ledger row.',
+                self::integer($row->id),
+            ),
+            $rows,
+        ));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function orphanAttachments(): array
+    {
+        $rows = DB::select(<<<'SQL'
+            SELECT a.id, a.capture_id
+            FROM attachments a
+            WHERE a.transaction_id IS NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM drafts d WHERE d.capture_id = a.capture_id AND d.status = 'pending'
+                )
+            ORDER BY a.id
+            SQL);
+
+        return array_values(array_map(
+            fn (stdClass $row): string => sprintf(
+                'Attachment %s has no movement and capture %s has no pending draft.',
+                self::text($row->id),
+                self::text($row->capture_id, 'none'),
+            ),
+            $rows,
+        ));
     }
 
     private static function integer(mixed $value): int

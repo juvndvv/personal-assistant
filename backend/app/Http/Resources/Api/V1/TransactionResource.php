@@ -48,7 +48,7 @@ final class TransactionResource extends JsonResource
             'transfer' => $this->transfer(),
             'adjustment_target_cents' => $transaction->adjustment_target_cents,
             'recurring_template_id' => null,
-            'attachments_count' => 0,
+            'attachments_count' => $transaction->attachments_count ?? 0,
             'created_at' => $transaction->created_at?->toIso8601String(),
             'updated_at' => $transaction->updated_at?->toIso8601String(),
         ];

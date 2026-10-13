@@ -30,10 +30,12 @@ import {
 } from '../../../shared/ui';
 import { CATEGORY_ICON_SVGS, iconNameFor } from '../../categories/category-appearance';
 import { EntryErrors, entryErrorsFrom, optionalText } from '../entry-errors';
+import { CaptureFlow } from '../../drafts/capture-flow';
 import { MovementActions } from '../movement-actions';
 import { MovementSheets } from '../movement-sheets';
 import { CategoryOption, LedgerReferenceData } from '../reference-data';
 import { TagInput } from '../tag-input/tag-input';
+import { CaptureControls, CapturedFile } from './capture-controls';
 
 export const QUICK_ADD_AMOUNT_ID = 'quick-add-amount';
 
@@ -41,6 +43,11 @@ const TYPE_OPTIONS = [
   { value: 'expense', label: 'Gasto' },
   { value: 'income', label: 'Ingreso' },
 ];
+
+const PROCESSING_LABEL = {
+  voice: 'Analizando la nota de voz…',
+  photo: 'Leyendo el ticket…',
+} as const;
 
 const SAVED_LABEL: Record<EntryType, string> = {
   expense: 'Gasto guardado',
@@ -50,6 +57,7 @@ const SAVED_LABEL: Record<EntryType, string> = {
 @Component({
   selector: 'app-quick-add-sheet',
   imports: [
+    CaptureControls,
     NgIcon,
     TagInput,
     UiButton,
@@ -64,22 +72,57 @@ const SAVED_LABEL: Record<EntryType, string> = {
   providers: [provideIcons({ ...CATEGORY_ICON_SVGS, lucideArrowLeftRight, lucideChevronDown })],
   template: `
     <ui-sheet [(open)]="open" title="Nuevo movimiento">
+      @if (processing(); as kind) {
+        <div
+          class="flex flex-col items-center gap-4 py-10 text-center"
+          role="status"
+          aria-live="polite"
+          data-testid="capture-processing"
+        >
+          <span
+            class="size-10 animate-spin rounded-full border-4 border-muted border-t-primary"
+            aria-hidden="true"
+          ></span>
+          <p class="font-medium text-foreground">{{ processingLabel[kind] }}</p>
+          <p class="text-sm text-muted-foreground">
+            Puede tardar unos segundos. Revisarás el borrador antes de guardarlo.
+          </p>
+          <ui-button variant="outline" (clicked)="cancelCapture()">Cancelar</ui-button>
+        </div>
+      }
       <form
         id="quick-add-form"
         class="flex flex-col gap-5 pb-2"
         novalidate
+        [hidden]="processing() !== null"
         (submit)="submit($event)"
       >
-        <ui-money-input
-          label="Importe"
-          size="lg"
-          name="amount_cents"
-          [inputId]="amountId"
-          [required]="true"
-          [(value)]="amount"
-          [state]="errors().amount_cents ? 'error' : 'default'"
-          [hint]="errors().amount_cents"
-        />
+        @if (captureFailure(); as message) {
+          <p
+            role="alert"
+            class="rounded-lg bg-warning/15 px-3 py-2 text-sm text-foreground"
+            data-testid="capture-failure"
+          >
+            {{ message }}
+          </p>
+        }
+        <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-2 gap-y-3">
+          <ui-money-input
+            label="Importe"
+            size="lg"
+            name="amount_cents"
+            [inputId]="amountId"
+            [required]="true"
+            [(value)]="amount"
+            [state]="errors().amount_cents ? 'error' : 'default'"
+            [hint]="errors().amount_cents"
+          />
+          <app-capture-controls
+            [disabled]="saving()"
+            [active]="open()"
+            (captured)="capture($event)"
+          />
+        </div>
         <ui-segmented
           ariaLabel="Tipo de movimiento"
           [options]="typeOptions"
@@ -190,9 +233,11 @@ const SAVED_LABEL: Record<EntryType, string> = {
         </ui-button>
       </form>
       <div uiSheetFooter>
-        <ui-button [fullWidth]="true" size="lg" [loading]="saving()" (clicked)="submit($event)">
-          Guardar
-        </ui-button>
+        @if (processing() === null) {
+          <ui-button [fullWidth]="true" size="lg" [loading]="saving()" (clicked)="submit($event)">
+            Guardar
+          </ui-button>
+        }
       </div>
     </ui-sheet>
   `,
@@ -205,11 +250,16 @@ export class QuickAddSheet {
   private readonly actions = inject(MovementActions);
   private readonly sheets = inject(MovementSheets);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly captureFlow = inject(CaptureFlow);
 
   readonly open = model(false);
 
   protected readonly amountId = QUICK_ADD_AMOUNT_ID;
   protected readonly typeOptions = TYPE_OPTIONS;
+  protected readonly processingLabel = PROCESSING_LABEL;
+  protected readonly processing = this.captureFlow.processing;
+  protected readonly captureFailure = this.captureFlow.failure;
+  private clientStartedAt = new Date().toISOString();
   protected readonly type = signal<EntryType>('expense');
   protected readonly amount = signal<number | null>(null);
   protected readonly categoryId = signal<number | null>(null);
@@ -300,8 +350,31 @@ export class QuickAddSheet {
           void this.loadDefaults();
           this.focusAmount();
         });
+      } else {
+        untracked(() => {
+          if (this.captureFlow.processing() !== null) {
+            this.captureFlow.cancel();
+          }
+        });
       }
     });
+  }
+
+  protected async capture(captured: CapturedFile): Promise<void> {
+    const result = await this.captureFlow.submit({
+      kind: captured.kind,
+      file: captured.file,
+      filename: captured.filename,
+      clientStartedAt: this.clientStartedAt,
+    });
+    if (result !== null) {
+      this.open.set(false);
+    }
+  }
+
+  protected cancelCapture(): void {
+    this.captureFlow.cancel();
+    this.focusAmount();
   }
 
   protected iconFor(category: CategoryOption): string {
@@ -382,6 +455,8 @@ export class QuickAddSheet {
   }
 
   private reset(): void {
+    this.clientStartedAt = new Date().toISOString();
+    this.captureFlow.clearFailure();
     this.type.set('expense');
     this.amount.set(null);
     this.categoryId.set(null);

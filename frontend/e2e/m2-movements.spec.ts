@@ -333,7 +333,7 @@ test.describe('M2 movements journey', () => {
 
     await page.getByRole('button', { name: 'Filtros', exact: true }).click();
     const filters = page.getByRole('dialog', { name: 'Filtros' });
-    await filters.getByRole('checkbox', { name: 'Ingreso' }).click();
+    await filters.getByRole('checkbox', { name: 'Ingreso', exact: true }).click();
     await page.getByRole('button', { name: 'Aplicar filtros' }).click();
     await expect(page).toHaveURL(/type=income/);
     await expect(page.getByText('No hay movimientos')).toBeVisible();

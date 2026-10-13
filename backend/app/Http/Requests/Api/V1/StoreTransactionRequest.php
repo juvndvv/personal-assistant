@@ -38,6 +38,11 @@ final class StoreTransactionRequest extends FormRequest
         return $this->integer('amount_cents');
     }
 
+    public function draftId(): ?int
+    {
+        return $this->filled('draft_id') ? $this->integer('draft_id') : null;
+    }
+
     public function movementDate(): ?CarbonImmutable
     {
         return MovementInputRules::parseDate($this->input('date'));

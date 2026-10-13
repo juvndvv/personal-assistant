@@ -142,8 +142,10 @@ jobs:
             echo "SANCTUM_STATEFUL_DOMAINS=localhost"
           } > .env
       - run: docker compose config --quiet
+      - run: scripts/check-compose-env.sh
       - run: docker compose up -d --wait --wait-timeout 180
-      - run: curl -fsSk -o /dev/null "${E2E_BASE_URL}/up"
+      - name: Runtime smoke (health, php.ini limits, receipts volume, schedule:list)
+        run: scripts/smoke.sh
       - name: Create the e2e user
         run: printf '%s' "${E2E_USER_PASSWORD}" | docker compose exec -T web php artisan app:create-user "${E2E_USER_EMAIL}" --name=E2E --password-stdin
       - name: Seed the dev ledger

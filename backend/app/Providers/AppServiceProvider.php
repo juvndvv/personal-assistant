@@ -47,6 +47,10 @@ final class AppServiceProvider extends ServiceProvider
             self::loginThrottleKey($request),
         ));
 
+        RateLimiter::for('captures', fn (Request $request): Limit => Limit::perHour(self::capturesPerHour())->by(
+            self::userThrottleKey($request),
+        ));
+
         RateLimiter::for('password', fn (Request $request): Limit => Limit::perMinute(5)->by(
             self::passwordThrottleKey($request),
         ));
@@ -57,6 +61,20 @@ final class AppServiceProvider extends ServiceProvider
         $email = $request->input('email');
 
         return (is_string($email) ? Str::lower(trim($email)) : '').'|'.$request->ip();
+    }
+
+    private static function capturesPerHour(): int
+    {
+        $value = config('finance.capture.rate_limit_per_hour');
+
+        return is_numeric($value) ? (int) $value : 60;
+    }
+
+    private static function userThrottleKey(Request $request): string
+    {
+        $userId = $request->user()?->getAuthIdentifier();
+
+        return is_scalar($userId) ? (string) $userId : (string) $request->ip();
     }
 
     private static function passwordThrottleKey(Request $request): string

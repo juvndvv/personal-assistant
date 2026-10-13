@@ -168,7 +168,7 @@ describe('POST /transactions', function (): void {
         'too many tags' => [['tags' => range(1, 11)], 'tags'],
         'blank tag' => [['tags' => ['   ']], 'tags.0'],
         'long tag' => [['tags' => [str_repeat('a', 41)]], 'tags.0'],
-        'draft before drafts exist' => [['draft_id' => 5], 'draft_id'],
+        'unknown draft' => [['draft_id' => 5], 'draft_id'],
     ]);
 
     it('accepts a date up to 366 days ahead', function (): void {

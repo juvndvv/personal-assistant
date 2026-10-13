@@ -318,3 +318,104 @@ export interface QuickAddDefaults {
   account_id: number | null;
   frequent_category_ids: Record<EntryType, number[]>;
 }
+
+export type AttachmentKind = 'audio' | 'image';
+
+export interface Attachment {
+  id: string;
+  kind: AttachmentKind;
+  mime: string;
+  size_bytes: number;
+  original_name: string | null;
+  url: string;
+  download_url: string;
+  created_at: string;
+}
+
+export type CaptureKind = 'voice' | 'photo';
+export type CaptureStatus = 'processing' | 'completed' | 'failed';
+
+export interface Capture {
+  id: string;
+  kind: CaptureKind;
+  status: CaptureStatus;
+  transcript: string | null;
+  error: string | null;
+  transcription_ms: number | null;
+  extraction_ms: number | null;
+  attachments: Attachment[];
+  created_at: string;
+}
+
+export type DraftOrigin = 'voice' | 'photo' | 'recurring';
+export type DraftStatus = 'pending' | 'confirmed' | 'discarded';
+export type DraftType = 'expense' | 'income' | 'transfer';
+export type FieldSource = 'ai' | 'history' | 'template' | 'default';
+
+export const DRAFT_FIELDS = [
+  'type',
+  'amount_cents',
+  'date',
+  'account_id',
+  'to_account_id',
+  'category_id',
+  'description',
+  'merchant',
+] as const;
+export type DraftField = (typeof DRAFT_FIELDS)[number];
+
+export interface DraftProposal {
+  type: DraftType | null;
+  amount_cents: number | null;
+  date: IsoDateString | null;
+  account_id: number | null;
+  to_account_id: number | null;
+  category_id: number | null;
+  description: string | null;
+  merchant: string | null;
+}
+
+export interface DraftRecurring {
+  template_id: number;
+  template_name: string;
+  occurrence_id: number;
+  due_date: IsoDateString;
+  is_variable: boolean;
+}
+
+export interface Draft {
+  id: number;
+  origin: DraftOrigin;
+  status: DraftStatus;
+  proposal: DraftProposal;
+  confidence: Partial<Record<DraftField, number>>;
+  field_sources: Partial<Record<DraftField, FieldSource>>;
+  low_confidence_fields: DraftField[];
+  capture: Capture | null;
+  recurring: DraftRecurring | null;
+  transaction_id: number | null;
+  transfer_id: number | null;
+  corrected_fields: string[] | null;
+  confirmed_at: string | null;
+  discarded_at: string | null;
+  created_at: string;
+}
+
+export interface CaptureResult {
+  capture: Capture;
+  draft: Draft;
+}
+
+export interface CaptureUpload {
+  kind: CaptureKind;
+  file: Blob;
+  filename: string;
+  clientStartedAt?: string;
+}
+
+export interface DraftListQuery {
+  status?: DraftStatus;
+  origin?: readonly DraftOrigin[];
+  page?: number;
+  per_page?: number;
+}

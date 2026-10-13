@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Ai\Agents\TransactionExtractor;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,7 @@ pest()->extend(TestCase::class)
     ->beforeEach(function (): void {
         Http::preventStrayRequests();
         Transcription::fake()->preventStrayTranscriptions();
+        TransactionExtractor::fake()->preventStrayPrompts();
     })
     ->in('Feature', 'Database', 'Unit');
 

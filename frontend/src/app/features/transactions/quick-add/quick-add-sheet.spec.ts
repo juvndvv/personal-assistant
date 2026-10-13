@@ -18,6 +18,9 @@ import { anAccount } from '../../accounts/testing/account-fixtures';
 import { ShellLayout } from '../../shell/shell.layout';
 import { MovementSheets } from '../movement-sheets';
 import { aTransaction } from '../testing/transaction-fixtures';
+import { AttachmentsApi } from '../../../core/api/attachments.api';
+import { DraftsApi } from '../../../core/api/drafts.api';
+import { quietAttachmentsApi, quietDraftsApi } from '../../drafts/testing/draft-fixtures';
 
 function category(
   id: number,
@@ -62,6 +65,8 @@ async function setup(defaults$: Observable<QuickAddDefaults> = of(DEFAULTS)) {
   const toast = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
   const view = await render(ShellLayout, {
     providers: [
+      { provide: DraftsApi, useValue: quietDraftsApi() },
+      { provide: AttachmentsApi, useValue: quietAttachmentsApi() },
       provideRouter([]),
       { provide: AuthStore, useValue: { user: signal(null), logout: vi.fn() } },
       { provide: AppUpdates, useValue: { updateReady: signal(false), reload: vi.fn() } },

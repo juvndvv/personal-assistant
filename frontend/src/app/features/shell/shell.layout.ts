@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, effect, inject } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideArrowLeftRight,
@@ -13,7 +14,9 @@ import {
 import { AuthStore } from '../../core/auth/auth.store';
 import { AppUpdates } from '../../core/pwa/app-updates';
 import { ConnectivityStatus } from '../../core/pwa/connectivity-status';
+import { filter } from 'rxjs';
 import { UiToast } from '../../shared/ui';
+import { PendingDrafts } from '../drafts/pending-drafts';
 import { MovementSheets } from '../transactions/movement-sheets';
 import { MovementSheetsHost } from '../transactions/movement-sheets-host';
 import { NAV_ITEMS } from './nav-items';
@@ -58,6 +61,14 @@ import { NAV_ITEMS } from './nav-items';
             >
               <ng-icon [name]="item.icon" size="20" aria-hidden="true" />
               {{ item.label }}
+              @if (item.showsPendingDrafts && pendingCount() > 0) {
+                <span
+                  class="ms-auto min-w-5 rounded-full bg-primary px-1.5 text-center text-xs leading-5 font-semibold text-primary-foreground"
+                  data-testid="drafts-badge"
+                  ><span aria-hidden="true">{{ pendingCount() }}</span
+                  ><span class="sr-only">, {{ pendingLabel() }}</span></span
+                >
+              }
             </a>
           }
         }
@@ -111,10 +122,18 @@ import { NAV_ITEMS } from './nav-items';
                 [routerLink]="item.path"
                 routerLinkActive="text-primary"
                 [routerLinkActiveOptions]="{ exact: item.exact }"
-                class="flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-muted-foreground"
+                class="relative flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-muted-foreground"
               >
                 <ng-icon [name]="item.icon" size="22" aria-hidden="true" />
                 {{ item.label }}
+                @if (item.showsPendingDrafts && pendingCount() > 0) {
+                  <span
+                    class="absolute top-1.5 left-1/2 ms-2 min-w-4.5 rounded-full bg-primary px-1 text-center text-[10px] leading-4.5 font-semibold text-primary-foreground"
+                    data-testid="drafts-badge"
+                    ><span aria-hidden="true">{{ pendingCount() }}</span
+                    ><span class="sr-only">, {{ pendingLabel() }}</span></span
+                  >
+                }
               </a>
             }
           </li>
@@ -133,8 +152,17 @@ export class ShellLayout {
   protected readonly sheets = inject(MovementSheets);
   private readonly appUpdates = inject(AppUpdates);
   private readonly toast = inject(UiToast);
+  private readonly pendingDrafts = inject(PendingDrafts);
+  protected readonly pendingCount = this.pendingDrafts.count;
 
   constructor() {
+    void this.pendingDrafts.refresh();
+    inject(Router)
+      .events.pipe(
+        filter((event) => event instanceof NavigationEnd),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => void this.pendingDrafts.refresh());
     effect(() => {
       if (this.appUpdates.updateReady()) {
         this.toast.info('Hay una nueva versión disponible', {
@@ -142,6 +170,11 @@ export class ShellLayout {
         });
       }
     });
+  }
+
+  protected pendingLabel(): string {
+    const count = this.pendingCount();
+    return count === 1 ? '1 pendiente' : `${count} pendientes`;
   }
 
   protected logout(): void {

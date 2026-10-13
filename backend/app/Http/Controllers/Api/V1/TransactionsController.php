@@ -28,6 +28,7 @@ final class TransactionsController extends Controller
 
         $page = $transactions->sorted($filters)
             ->with(TransactionResource::RELATIONS)
+            ->withReceiptsCount()
             ->paginate($request->perPage())
             ->withQueryString();
 
@@ -47,6 +48,7 @@ final class TransactionsController extends Controller
             merchant: $request->text('merchant'),
             note: $request->text('note'),
             tags: $request->tags(),
+            draftId: $request->draftId(),
         );
 
         return $this->resource($transaction)->response()->setStatusCode(Response::HTTP_CREATED);
@@ -76,6 +78,6 @@ final class TransactionsController extends Controller
 
     private function resource(Transaction $transaction): TransactionResource
     {
-        return new TransactionResource($transaction->loadMissing(TransactionResource::RELATIONS));
+        return new TransactionResource($transaction->loadMissing(TransactionResource::RELATIONS)->loadReceiptsCount());
     }
 }

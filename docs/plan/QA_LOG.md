@@ -10,6 +10,9 @@ Per-milestone QA results, manual device checks and performance numbers (see
 | Trust Caddy's local root CA on an iPhone and open the app over LAN/Tailscale (`docs/ops/local-https.md`) | M0 | pending |
 | Install the PWA on iPhone (Safari, Add to Home Screen) and Android (Chrome) | M0 | pending |
 | First CI run on GitHub (all five jobs green, GHA cache warm for `e2e`) | M0 | pending |
+| iPhone Safari: voice (hold-to-talk, `audio/mp4` upload transcribed) and photo capture, review, confirm, receipt visible on the movement | M3 | pending |
+| Installed PWA (iPhone and Android): voice and photo capture end to end with microphone and camera permissions | M3 | pending |
+| `php artisan app:ai-eval tests/Fixtures/ai-eval` with real anonymized samples and `OPENAI_API_KEY`: per-field accuracy and latency (target p50 < 5 s) | M3 | pending |
 
 ## M0 Foundation
 
@@ -70,3 +73,22 @@ Note: `frontend/e2e/global-setup.ts` resets the login throttle with
 not the default compose project, export the same `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE` and
 `COMPOSE_ENV_FILES` in the shell that runs Playwright (the child process inherits them), or set
 `E2E_SKIP_STACK_RESET=1` and reset the throttle manually.
+
+## M3 AI capture
+
+### 2026-10-13 infra (host macOS, Docker via OrbStack)
+
+Isolated prod-like stack: `COMPOSE_PROJECT_NAME` scratch name, `COMPOSE_FILE=compose.yaml:compose.prod.yaml`,
+`APP_IMAGE=personal-finance:local`, `HTTPS_PORT=18743`.
+
+| Check | Command | Result |
+|---|---|---|
+| Runtime image | `docker build --target runtime -t personal-finance:local .` | success; `storage/app/private/receipts` created as `app` (uid 1000) in the image |
+| Compose config | `docker compose config -q` (dev and prod) | valid |
+| Stack up | `docker compose up -d --wait` | `migrate` exited 0; `db`, `web` healthy; `worker`, `scheduler` running |
+| Runtime smoke | `make smoke` / `scripts/smoke.sh` (also in CI `e2e`) | `/up` 2xx; `pg_isready` ok; effective ini `upload_max_filesize`/`post_max_size` 12M, `max_execution_time` 45; receipts dir exists, writable and owned by the runtime uid in `web`, `worker`, `scheduler`; a file written by `web` is readable and deletable by `scheduler`; `schedule:list` shows `30 3 * * * php artisan app:drafts:purge` |
+| Entrypoint guard | root-owned `appstorage` volume | container exits 1 with an `app-entrypoint: ... not writable` message |
+| Upgrade path | volume from an older image without `private/receipts` | entrypoint creates it as `app`, exit 0 |
+| Lint | `check-pins.sh`, `actionlint` 1.7.12, `shellcheck` 0.11.0 | clean |
+
+Teardown: `down -v`; no containers or volumes of the scratch project remain.

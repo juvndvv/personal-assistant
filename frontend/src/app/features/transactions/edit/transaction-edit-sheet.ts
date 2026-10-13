@@ -27,6 +27,7 @@ import {
 import { EntryErrors, entryErrorsFrom, optionalText } from '../entry-errors';
 import { MovementActions } from '../movement-actions';
 import { MovementSheets } from '../movement-sheets';
+import { ReceiptsGallery } from '../receipts/receipts-gallery';
 import { LedgerReferenceData } from '../reference-data';
 import { TagInput } from '../tag-input/tag-input';
 
@@ -38,6 +39,7 @@ const TYPE_OPTIONS = [
 @Component({
   selector: 'app-transaction-edit-sheet',
   imports: [
+    ReceiptsGallery,
     TagInput,
     UiButton,
     UiDateInput,
@@ -136,6 +138,11 @@ const TYPE_OPTIONS = [
           }
         }
       </form>
+      @if (!isAdjustment()) {
+        <div class="border-t border-border pt-4 pb-2">
+          <app-receipts-gallery [transactionId]="transaction()?.id ?? null" />
+        </div>
+      }
       <div uiSheetFooter class="flex flex-col gap-2">
         <ui-button [fullWidth]="true" [loading]="saving()" (clicked)="submit($event)">
           Guardar cambios
