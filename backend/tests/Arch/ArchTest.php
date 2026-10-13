@@ -92,6 +92,20 @@ arch('application code does not depend on test code')
     ->expect('App')
     ->not->toUse('Tests');
 
+arch('actions are final use cases with a handle method')
+    ->expect('App\Actions')
+    ->classes()
+    ->toBeFinal()
+    ->toHaveMethod('handle');
+
+arch('enums are string backed')
+    ->expect('App\Enums')
+    ->toBeStringBackedEnums();
+
+arch('domain code does not depend on the HTTP layer')
+    ->expect('App\Domain')
+    ->not->toUse('App\Http');
+
 arch('domain conflicts are exceptions')
     ->expect('App\Exceptions\DomainConflict')
     ->toExtend(RuntimeException::class)

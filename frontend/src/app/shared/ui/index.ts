@@ -11,3 +11,4 @@ export { UiSelect, type UiSelectOption } from './ui-select';
 export { UiSheet, UiSheetFooter, type UiSheetSide } from './ui-sheet';
 export { UiToast, UiToaster, type UiToastOptions, type UiToastTone } from './ui-toast';
 export type { UiSize, UiState } from './ui-types';
+export { UiTabs, type UiTabItem } from './ui-tabs';

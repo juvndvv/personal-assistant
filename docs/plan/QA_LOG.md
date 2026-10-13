@@ -43,3 +43,30 @@ Host ports 80/443 were in use by another project, so the local runs used `HTTP_P
 
 Teardown: both stacks stopped with `down -v`; only the images `personal-finance:local` and
 `personal-finance:dev` remain.
+
+## M1 Ledger kernel
+
+Acceptance checklist: `docs/plan/milestones/M1.md`.
+
+### 2026-10-13 triage verification (host macOS, Docker via OrbStack)
+
+The run used an isolated compose project so it did not collide with the default dev stack:
+`COMPOSE_PROJECT_NAME` set to a scratch name, `COMPOSE_FILE=compose.yaml:compose.prod.yaml`,
+`COMPOSE_ENV_FILES` pointing at a scratch env file, `APP_IMAGE=personal-finance:local` and
+`HTTPS_PORT=18643`.
+
+| Check | Command | Result |
+|---|---|---|
+| Runtime image | `docker build --target runtime -t personal-finance:local .` from the current tree | success |
+| Prod compose config | `docker compose config -q` with the variables above | valid |
+| Stack up | `docker compose up -d --wait` | `migrate` exited 0; `db`, `web` healthy |
+| Single user | `docker compose exec -T web php artisan app:create-user ... --password-stdin` | created |
+| Dev seed | `docker compose exec -T web php artisan db:seed --class=DevSeeder --force` | seeded accounts of all four types and sample movements |
+| Ledger invariants | `docker compose exec -T web php artisan app:ledger:verify` | printed `Ledger OK`, exit 0 |
+| Playwright M0 + M1 | `E2E_BASE_URL=https://localhost:18643 npx playwright test` | 17/17 passed (setup + `m0-auth` + `m1-ledger`, Chromium and WebKit) |
+
+Note: `frontend/e2e/global-setup.ts` resets the login throttle with
+`docker compose exec -T web php artisan cache:clear` from the repository root. When the stack is
+not the default compose project, export the same `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE` and
+`COMPOSE_ENV_FILES` in the shell that runs Playwright (the child process inherits them), or set
+`E2E_SKIP_STACK_RESET=1` and reset the throttle manually.

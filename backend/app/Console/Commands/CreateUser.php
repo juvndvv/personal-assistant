@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Console\Input\PasswordInput;
 use App\Models\User;
+use Database\Seeders\DefaultCategoriesSeeder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -59,6 +60,11 @@ final class CreateUser extends Command
         ]);
 
         $this->info("User {$email} created.");
+
+        if ($this->option('with-defaults')) {
+            $this->laravel->make(DefaultCategoriesSeeder::class)->run();
+            $this->info('Default categories created.');
+        }
 
         return self::SUCCESS;
     }

@@ -6,6 +6,8 @@ namespace App\Providers;
 
 use App\Console\Input\PasswordInput;
 use App\Console\Input\StdinPasswordInput;
+use App\Domain\Period\PeriodResolver;
+use App\Models\Setting;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Events\DiagnosingHealth;
 use Illuminate\Http\Request;
@@ -24,6 +26,14 @@ final class AppServiceProvider extends ServiceProvider
     public array $bindings = [
         PasswordInput::class => StdinPasswordInput::class,
     ];
+
+    public function register(): void
+    {
+        $this->app->bind(
+            PeriodResolver::class,
+            fn (): PeriodResolver => new PeriodResolver(Setting::current()->month_start_day),
+        );
+    }
 
     public function boot(): void
     {

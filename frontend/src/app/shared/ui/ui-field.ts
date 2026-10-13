@@ -13,12 +13,14 @@ const HINT_CLASS: Record<UiState, string> = {
   template: `
     <div class="flex flex-col gap-1.5">
       @if (label()) {
-        <label [attr.for]="controlId()" class="text-sm font-medium text-foreground">
-          {{ label() }}
+        <div class="flex items-baseline gap-0.5">
+          <label [attr.for]="controlId()" class="text-sm font-medium text-foreground">{{
+            label()
+          }}</label>
           @if (required()) {
-            <span class="text-destructive" aria-hidden="true">*</span>
+            <span class="text-sm text-destructive" aria-hidden="true">*</span>
           }
-        </label>
+        </div>
       }
       <ng-content />
       @if (hint()) {

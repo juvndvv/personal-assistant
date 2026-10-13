@@ -385,7 +385,7 @@ Soft delete. 204. Errors: 409 `account_has_movements`.
 Request: `{ "date": "2026-10-13", "target_balance_cents": 1250000, "note": "Valor cartera" }`.
 The server computes `delta = target − balance_at(date)` and stores an `adjustment` transaction with `signed_amount_cents = delta`.
 Response 201 `{ "data": Transaction }`.
-Errors: 422 `errors.target_balance_cents` when the delta is 0; 422 `errors.date` when before `opening_date` or in the future; 422 on archived account.
+Errors: 422 `errors.target_balance_cents` when the delta is 0; 422 `errors.date` when before `opening_date` or in the future; 422 `errors.account_id` on an archived account.
 
 #### `GET /api/v1/accounts/{id}/settlement-suggestion?date=2026-10-13` (RF-04, M2)
 
@@ -410,7 +410,7 @@ Errors: 409 `not_a_credit_card`.
 
 #### `GET /api/v1/categories?kind=expense&include_archived=0`
 
-Tree: `{ "data": [Category, ...] }`, top-level ordered by `sort_order`, `name`. Without `kind`, both kinds.
+Tree: `{ "data": [Category, ...] }`, top-level ordered by `sort_order`, `name` (children likewise). Without `kind`, both kinds (expense first). Without `include_archived=1`, archived categories and the children of archived parents are omitted.
 
 #### `POST /api/v1/categories`
 
@@ -420,7 +420,7 @@ Response 201 `{ "data": Category }`.
 
 #### `PATCH /api/v1/categories/{id}`
 
-Fields: `name`, `icon`, `color`, `sort_order`, `parent_id` (only to another top-level category of the same kind, and only if the category has no children). `kind` is immutable. Response 200.
+Fields: `name`, `icon`, `color`, `sort_order`, `parent_id` (only to another top-level category of the same kind, and only if the category has no children; violations return 422 `errors.parent_id`). `kind` is immutable: it may be echoed back unchanged, any other value returns 422 `errors.kind`. Response 200.
 
 #### `POST /api/v1/categories/{id}/archive` / `unarchive` → 200 `{ "data": Category }`
 

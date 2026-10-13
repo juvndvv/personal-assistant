@@ -48,6 +48,42 @@ export const routes: Routes = [
         title: 'Más · Finanzas',
         loadComponent: () => import('./features/more/more.page').then((m) => m.MorePage),
       },
+      {
+        path: 'mas/categorias',
+        title: 'Categorías · Finanzas',
+        loadComponent: () =>
+          import('./features/categories/categories.page').then((m) => m.CategoriesPage),
+      },
+      {
+        path: 'mas/ajustes',
+        title: 'Ajustes · Finanzas',
+        loadComponent: () =>
+          import('./features/settings/settings.page').then((m) => m.SettingsPage),
+      },
+      {
+        path: 'cuentas',
+        title: 'Cuentas · Finanzas',
+        loadComponent: () =>
+          import('./features/accounts/accounts.page').then((m) => m.AccountsPage),
+      },
+      {
+        path: 'cuentas/nueva',
+        title: 'Nueva cuenta · Finanzas',
+        loadComponent: () =>
+          import('./features/accounts/account-editor.page').then((m) => m.AccountEditorPage),
+      },
+      {
+        path: 'cuentas/:id',
+        title: 'Cuenta · Finanzas',
+        loadComponent: () =>
+          import('./features/accounts/account-detail.page').then((m) => m.AccountDetailPage),
+      },
+      {
+        path: 'cuentas/:id/editar',
+        title: 'Editar cuenta · Finanzas',
+        loadComponent: () =>
+          import('./features/accounts/account-editor.page').then((m) => m.AccountEditorPage),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

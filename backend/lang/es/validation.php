@@ -168,5 +168,33 @@ return [
         'password_confirmation' => 'confirmación de la contraseña',
         'name' => 'nombre',
         'remember' => 'recordarme',
+        'kind' => 'tipo',
+        'type' => 'tipo',
+        'month_start_day' => 'día de inicio del mes',
+        'default_account_id' => 'cuenta por defecto',
+        'orphan_draft_ttl_days' => 'días de conservación de borradores',
+        'opening_date' => 'fecha de apertura',
+        'opening_balance_cents' => 'saldo inicial',
+        'statement_day' => 'día de corte',
+        'settlement_account_id' => 'cuenta de pago',
+        'target_balance_cents' => 'saldo real',
+        'date' => 'fecha',
+        'note' => 'nota',
+        'until' => 'fecha límite',
+        'count' => 'número de periodos',
+        'include_archived' => 'incluir archivadas',
+        'parent_id' => 'categoría padre',
+        'color' => 'color',
+        'icon' => 'icono',
+        'sort_order' => 'orden',
+    ],
+
+    'values' => [
+        'opening_date' => [
+            'today' => 'hoy',
+        ],
+        'date' => [
+            'today' => 'hoy',
+        ],
     ],
 ];

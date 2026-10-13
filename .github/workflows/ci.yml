@@ -146,6 +146,10 @@ jobs:
       - run: curl -fsSk -o /dev/null "${E2E_BASE_URL}/up"
       - name: Create the e2e user
         run: printf '%s' "${E2E_USER_PASSWORD}" | docker compose exec -T web php artisan app:create-user "${E2E_USER_EMAIL}" --name=E2E --password-stdin
+      - name: Seed the dev ledger
+        run: docker compose exec -T web php artisan db:seed --class='Database\Seeders\DevSeeder' --force --no-interaction
+      - name: Ledger invariants hold on the dev seed
+        run: docker compose exec -T web php artisan app:ledger:verify
       - uses: actions/setup-node@v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -157,6 +161,8 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
       - working-directory: frontend
         run: npx playwright test
+      - name: Ledger invariants hold after the journeys
+        run: docker compose exec -T web php artisan app:ledger:verify
       - if: failure()
         run: docker compose logs --no-color
       - if: failure()

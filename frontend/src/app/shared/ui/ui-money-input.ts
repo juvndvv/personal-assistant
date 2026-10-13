@@ -10,12 +10,14 @@ import {
 } from '@angular/core';
 import { YuwInputAddonImports, YuwInputComponent } from 'yukit-web';
 import { formatCentsForInput } from '../../core/money/format-cents';
-import { parseEuroToCents } from '../../core/money/parse-euro-to-cents';
+import { parseEuroToCents, parseSignedEuroToCents } from '../../core/money/parse-euro-to-cents';
 import { syncFieldAccessibility } from './field-accessibility';
 import { UiField } from './ui-field';
 import { FIELD_SIZE, UiSize, UiState, nextUiId } from './ui-types';
 
 const INVALID_AMOUNT_HINT = 'Introduce un importe válido, por ejemplo 12,50';
+const INVALID_SIGNED_AMOUNT_HINT = 'Introduce un importe válido, por ejemplo 12,50 o -12,50';
+const PENDING_SIGN = /^\s*[-\u2212]\s*$/;
 
 @Component({
   selector: 'ui-money-input',
@@ -59,13 +61,14 @@ export class UiMoneyInput {
   readonly name = input<string>();
   readonly required = input(false, { transform: booleanAttribute });
   readonly disabled = input(false, { transform: booleanAttribute });
+  readonly allowNegative = input(false, { transform: booleanAttribute });
   readonly inputId = input(nextUiId('ui-money-input'));
 
   protected readonly fieldSize = FIELD_SIZE;
   protected readonly text = linkedSignal<number | null, string>({
     source: this.value,
     computation: (cents, previous) => {
-      if (previous !== undefined && parseEuroToCents(previous.value) === cents) {
+      if (previous !== undefined && this.parse(previous.value) === cents) {
         return previous.value;
       }
       return cents === null ? '' : formatCentsForInput(cents);
@@ -77,7 +80,11 @@ export class UiMoneyInput {
     this.unparseable() ? 'error' : this.state(),
   );
   protected readonly effectiveHint = computed(() =>
-    this.unparseable() ? INVALID_AMOUNT_HINT : this.hint(),
+    this.unparseable()
+      ? this.allowNegative()
+        ? INVALID_SIGNED_AMOUNT_HINT
+        : INVALID_AMOUNT_HINT
+      : this.hint(),
   );
 
   constructor() {
@@ -86,9 +93,14 @@ export class UiMoneyInput {
 
   protected onTextChange(raw: string): void {
     this.text.set(raw);
-    const cents = raw.trim() === '' ? null : parseEuroToCents(raw);
-    this.unparseable.set(raw.trim() !== '' && cents === null);
+    const incomplete = raw.trim() === '' || (this.allowNegative() && PENDING_SIGN.test(raw));
+    const cents = incomplete ? null : this.parse(raw);
+    this.unparseable.set(!incomplete && cents === null);
     this.value.set(cents);
+  }
+
+  private parse(raw: string): number | null {
+    return this.allowNegative() ? parseSignedEuroToCents(raw) : parseEuroToCents(raw);
   }
 
   protected onCommit(): void {

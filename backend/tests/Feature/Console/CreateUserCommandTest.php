@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Console\Input\PasswordInput;
+use App\Models\Category;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 
@@ -116,11 +117,21 @@ it('rejects an invalid email', function (): void {
     expect(User::query()->count())->toBe(0);
 });
 
-it('accepts the with-defaults option', function (): void {
+it('seeds the default categories with the with-defaults option', function (): void {
     fakeStdin("correct-horse-battery\n");
 
     $this->artisan('app:create-user', ['email' => 'dani@example.com', '--password-stdin' => true, '--with-defaults' => true])
+        ->expectsOutputToContain('Default categories created.')
         ->assertSuccessful();
 
-    expect(User::query()->count())->toBe(1);
+    expect(User::query()->count())->toBe(1)
+        ->and(Category::query()->where('name', 'Supermercado')->exists())->toBeTrue();
+});
+
+it('creates no categories without the with-defaults option', function (): void {
+    fakeStdin("correct-horse-battery\n");
+
+    $this->artisan('app:create-user', ['email' => 'dani@example.com', '--password-stdin' => true])->assertSuccessful();
+
+    expect(Category::query()->count())->toBe(0);
 });

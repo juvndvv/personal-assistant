@@ -34,6 +34,17 @@ export function parseEuroToCents(input: string): number | null {
   return cents > MAX_AMOUNT_CENTS ? null : cents;
 }
 
+const NEGATIVE_PREFIX = /^\s*[-\u2212]\s*/;
+
+export function parseSignedEuroToCents(input: string): number | null {
+  const negative = NEGATIVE_PREFIX.exec(input);
+  if (negative === null) {
+    return parseEuroToCents(input);
+  }
+  const magnitude = parseEuroToCents(input.slice(negative[0].length));
+  return magnitude === null ? null : magnitude === 0 ? 0 : -magnitude;
+}
+
 function normalizeSeparators(compact: string): string | null {
   const commaCount = compact.split(',').length - 1;
   if (commaCount > 1) {

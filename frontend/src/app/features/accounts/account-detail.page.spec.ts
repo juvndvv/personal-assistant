@@ -1,0 +1,154 @@
+import { HttpErrorResponse } from '@angular/common/http';
+import { Router, provideRouter } from '@angular/router';
+import { render, screen } from '@testing-library/angular';
+import userEvent from '@testing-library/user-event';
+import { of, throwError } from 'rxjs';
+import { AccountsApi } from '../../core/api/accounts.api';
+import { Account, Transaction } from '../../core/api/models';
+import { todayInMadrid } from '../../core/date/iso-date';
+import { UiToast } from '../../shared/ui';
+import { AccountDetailPage } from './account-detail.page';
+import { anAccount } from './testing/account-fixtures';
+
+function anAdjustment(signed: number, target: number): Transaction {
+  return {
+    id: 99,
+    type: 'adjustment',
+    account: { id: 1, name: 'BBVA', type: 'checking', archived: false },
+    amount_cents: Math.abs(signed),
+    signed_amount_cents: signed,
+    date: todayInMadrid(),
+    category: null,
+    description: null,
+    merchant: null,
+    note: null,
+    origin: 'manual',
+    tags: [],
+    transfer: null,
+    adjustment_target_cents: target,
+    recurring_template_id: null,
+    attachments_count: 0,
+    created_at: '2026-10-13T10:00:00+02:00',
+    updated_at: '2026-10-13T10:00:00+02:00',
+  };
+}
+
+async function setup(account: Account = anAccount({ id: 1, balance_cents: 100000 })) {
+  const api = {
+    get: vi.fn(() => of(account)),
+    archive: vi.fn(() => of({ ...account, archived_at: '2026-10-13T10:00:00+02:00' })),
+    unarchive: vi.fn(() => of({ ...account, archived_at: null })),
+    delete: vi.fn(),
+    adjust: vi.fn(),
+  };
+  const view = await render(AccountDetailPage, {
+    providers: [
+      provideRouter([]),
+      { provide: AccountsApi, useValue: api },
+      { provide: UiToast, useValue: { success: vi.fn(), error: vi.fn() } },
+    ],
+    inputs: { id: String(account.id) },
+  });
+  const router = view.fixture.debugElement.injector.get(Router);
+  vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+  return { api, user: userEvent.setup() };
+}
+
+describe('AccountDetailPage', () => {
+  it('shows the balance and the last update', async () => {
+    await setup(anAccount({ id: 1, balance_cents: -5000, last_updated_on: '2026-10-12' }));
+
+    expect(await screen.findByTestId('account-balance')).toHaveTextContent('-50,00 €');
+    expect(screen.getByTestId('account-balance')).toHaveClass('text-destructive');
+    expect(screen.getByText('Actualizada el 12 oct 2026')).toBeInTheDocument();
+  });
+
+  it('suggests archiving when the account has movements', async () => {
+    const { api, user } = await setup();
+    api.delete.mockReturnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 409,
+            error: { message: 'Has movements', code: 'account_has_movements' },
+          }),
+      ),
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Eliminar' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Eliminar cuenta' });
+    await user.click(
+      Array.from(dialog.querySelectorAll('button')).find((button) =>
+        button.textContent?.includes('Eliminar'),
+      ) as HTMLButtonElement,
+    );
+
+    expect(await screen.findByText(/archívala para ocultarla/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Archivar', hidden: false }));
+    expect(api.archive).toHaveBeenCalledWith(1);
+  });
+
+  it('records an adjustment and shows the computed delta', async () => {
+    const { api, user } = await setup();
+    api.adjust.mockReturnValue(of(anAdjustment(25050, 125050)));
+
+    await user.click(await screen.findByRole('button', { name: 'Ajustar saldo' }));
+    await user.type(await screen.findByLabelText(/saldo real/i), '1250,50');
+    await user.click(screen.getByRole('button', { name: 'Guardar ajuste' }));
+
+    expect(api.adjust).toHaveBeenCalledWith(1, {
+      date: todayInMadrid(),
+      target_balance_cents: 125050,
+      note: null,
+    });
+    expect(await screen.findByTestId('adjustment-delta')).toHaveTextContent('+250,50 €');
+  });
+
+  it('refuses a target equal to today’s balance without calling the API', async () => {
+    const { api, user } = await setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Ajustar saldo' }));
+    await user.type(await screen.findByLabelText(/saldo real/i), '1000');
+    await user.click(screen.getByRole('button', { name: 'Guardar ajuste' }));
+
+    expect(api.adjust).not.toHaveBeenCalled();
+    expect(screen.getByText(/no hay nada que ajustar/i)).toBeInTheDocument();
+  });
+
+  it('shows the server message on a 422 zero delta', async () => {
+    const { api, user } = await setup();
+    api.adjust.mockReturnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 422,
+            error: {
+              message: 'El saldo no cambia.',
+              errors: { target_balance_cents: ['El saldo objetivo coincide con el saldo actual.'] },
+            },
+          }),
+      ),
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Ajustar saldo' }));
+    await user.type(await screen.findByLabelText(/saldo real/i), '-20');
+    await user.click(screen.getByRole('button', { name: 'Guardar ajuste' }));
+
+    expect(
+      await screen.findByText('El saldo objetivo coincide con el saldo actual.'),
+    ).toBeInTheDocument();
+  });
+
+  it('unarchives an archived account and disables adjustments', async () => {
+    const { api, user } = await setup(
+      anAccount({ id: 1, archived_at: '2026-09-01T10:00:00+02:00' }),
+    );
+
+    expect(await screen.findByRole('button', { name: 'Ajustar saldo' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Desarchivar' }));
+
+    expect(api.unarchive).toHaveBeenCalledWith(1);
+    expect(await screen.findByRole('button', { name: 'Archivar' })).toBeInTheDocument();
+  });
+});

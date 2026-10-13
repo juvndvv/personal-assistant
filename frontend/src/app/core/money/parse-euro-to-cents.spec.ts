@@ -1,4 +1,4 @@
-import { MAX_AMOUNT_CENTS, parseEuroToCents } from './parse-euro-to-cents';
+import { MAX_AMOUNT_CENTS, parseEuroToCents, parseSignedEuroToCents } from './parse-euro-to-cents';
 
 describe('parseEuroToCents', () => {
   it.each([
@@ -55,5 +55,21 @@ describe('parseEuroToCents', () => {
     expect(parseEuroToCents('1,15')).toBe(115);
     expect(parseEuroToCents('4,35')).toBe(435);
     expect(parseEuroToCents('1.005,07')).toBe(100507);
+  });
+});
+
+describe('parseSignedEuroToCents', () => {
+  it.each([
+    ['-120', -12000],
+    ['-0,50', -50],
+    ['− 1.234,56', -123456],
+    ['12,50', 1250],
+    ['-0', 0],
+  ])('parses %j as %i cents', (input, expected) => {
+    expect(parseSignedEuroToCents(input)).toBe(expected);
+  });
+
+  it.each([[''], ['-'], ['--12'], ['12-'], ['-abc'], ['+12']])('rejects %j', (input) => {
+    expect(parseSignedEuroToCents(input)).toBeNull();
   });
 });
