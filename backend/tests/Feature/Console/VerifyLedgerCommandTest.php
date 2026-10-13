@@ -152,3 +152,45 @@ it('fails on a confirmed draft that lost its ledger row', function (): void {
         ->expectsOutputToContain("Confirmed draft {$draftId} does not point to a ledger row.")
         ->assertFailed();
 });
+
+it('fails on a posted occurrence without its movement', function (): void {
+    $template = RawLedger::recurringTemplate();
+    $occurrence = RawLedger::occurrence($template, '2026-03', ['status' => 'posted']);
+
+    $this->artisan('app:ledger:verify')
+        ->expectsOutputToContain("Recurring occurrence {$occurrence} is posted but has 0 movements.")
+        ->assertFailed();
+});
+
+it('fails on an occurrence awaiting an amount without a pending draft', function (): void {
+    $template = RawLedger::recurringTemplate();
+    $occurrence = RawLedger::occurrence($template, '2026-03', ['status' => 'awaiting_amount']);
+    DB::table('drafts')->insert([
+        'origin' => 'recurring', 'status' => 'discarded', 'discarded_at' => now(), 'recurring_occurrence_id' => $occurrence,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $this->artisan('app:ledger:verify')
+        ->expectsOutputToContain("Recurring occurrence {$occurrence} awaits an amount but has 0 pending drafts.")
+        ->assertFailed();
+});
+
+it('passes with posted, awaiting and skipped occurrences including a soft-deleted movement', function (): void {
+    $account = RawLedger::account();
+    $category = RawLedger::category();
+    $template = RawLedger::recurringTemplate(['account_id' => $account, 'category_id' => $category]);
+    $posted = RawLedger::occurrence($template, '2026-03', ['status' => 'posted']);
+    $deleted = RawLedger::occurrence($template, '2026-04', ['status' => 'posted', 'due_date' => '2026-04-05']);
+    $awaiting = RawLedger::occurrence($template, '2026-05', ['status' => 'awaiting_amount', 'due_date' => '2026-05-05']);
+    RawLedger::occurrence($template, '2026-06', ['status' => 'skipped', 'due_date' => '2026-06-05']);
+    $row = ['account_id' => $account, 'category_id' => $category, 'origin' => 'recurring'];
+    RawLedger::transaction([...$row, 'recurring_occurrence_id' => $posted, 'date' => '2026-03-05']);
+    RawLedger::transaction([...$row, 'recurring_occurrence_id' => $deleted, 'date' => '2026-04-05', 'deleted_at' => now()]);
+    DB::table('drafts')->insert([
+        'origin' => 'recurring', 'recurring_occurrence_id' => $awaiting, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $this->artisan('app:ledger:verify')
+        ->expectsOutputToContain('Ledger OK')
+        ->assertSuccessful();
+});

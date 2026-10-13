@@ -84,15 +84,34 @@ check_shared_receipts_volume() {
   fi
 }
 
+scheduled_task_at() {
+  local schedule="$1" command="$2" expected_time="$3"
+  in_service scheduler php -r '
+    [$json, $command, $expectedTime] = [stream_get_contents(STDIN), $argv[1], $argv[2]];
+    [$hour, $minute] = array_map("intval", explode(":", $expectedTime));
+    foreach (json_decode($json, true, flags: JSON_THROW_ON_ERROR) as $task) {
+        if (str_contains($task["command"], $command)
+            && $task["expression"] === sprintf("%d %d * * *", $minute, $hour)
+            && substr($task["next_due_date"], 11, 8) === sprintf("%02d:%02d:00", $hour, $minute)) {
+            exit(0);
+        }
+    }
+    exit(1);
+  ' "$command" "$expected_time" <<< "$schedule"
+}
+
 check_schedule() {
-  local schedule
-  schedule="$(in_service scheduler php artisan schedule:list --no-ansi 2>&1 || true)"
-  printf '%s\n' "$schedule"
-  if grep -E '30[[:space:]]+3[[:space:]]+\*[[:space:]]+\*[[:space:]]+\*.*app:drafts:purge' <<< "$schedule" >/dev/null; then
-    pass "scheduler lists app:drafts:purge daily at 03:30"
-  else
-    fail "scheduler does not list app:drafts:purge at 03:30"
-  fi
+  local schedule command expected_time entry
+  printf '%s\n' "$(in_service scheduler php artisan schedule:list --timezone=Europe/Madrid --no-ansi 2>&1 || true)"
+  schedule="$(in_service scheduler php artisan schedule:list --timezone=Europe/Madrid --json --no-ansi 2>/dev/null || true)"
+  for entry in "app:drafts:purge 03:30" "app:recurring:generate 06:00"; do
+    read -r command expected_time <<< "$entry"
+    if scheduled_task_at "$schedule" "$command" "$expected_time"; then
+      pass "scheduler lists ${command} daily at ${expected_time} Europe/Madrid"
+    else
+      fail "scheduler does not list ${command} daily at ${expected_time} Europe/Madrid"
+    fi
+  done
 }
 
 check_up_endpoint

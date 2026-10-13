@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Actions\Drafts;
 
 use App\Enums\DraftStatus;
+use App\Enums\OccurrenceStatus;
 use App\Enums\TransferLeg;
 use App\Exceptions\DomainConflict;
 use App\Models\Attachment;
 use App\Models\Draft;
+use App\Models\RecurringOccurrence;
 use App\Models\Transaction;
 use App\Models\Transfer;
 use Carbon\CarbonImmutable;
@@ -51,6 +53,10 @@ final class ConfirmDraft
                 ->update(['transaction_id' => $receiptHolder->id, 'updated_at' => CarbonImmutable::now()]);
         }
 
+        if ($draft->recurring_occurrence_id !== null) {
+            self::postOccurrence($draft->recurring_occurrence_id, $transaction);
+        }
+
         $draft->corrected_fields = self::correctedFields($draft->proposal(), $submitted);
         $draft->status = DraftStatus::Confirmed;
         $draft->confirmed_at = CarbonImmutable::now();
@@ -64,6 +70,21 @@ final class ConfirmDraft
     public static function notPending(): DomainConflict
     {
         return new DomainConflict('draft_not_pending', 'El borrador ya se ha confirmado o descartado.');
+    }
+
+    private static function postOccurrence(int $occurrenceId, ?Transaction $transaction): void
+    {
+        if ($transaction === null) {
+            throw new InvalidArgumentException('A recurring draft is confirmed with a transaction.');
+        }
+
+        $transaction->recurring_occurrence_id = $occurrenceId;
+        $transaction->save();
+
+        RecurringOccurrence::query()->whereKey($occurrenceId)->update([
+            'status' => OccurrenceStatus::Posted->value,
+            'updated_at' => CarbonImmutable::now(),
+        ]);
     }
 
     /**

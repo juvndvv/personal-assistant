@@ -14,7 +14,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 final class TransactionResource extends JsonResource
 {
-    public const array RELATIONS = ['account', 'category.parent', 'transfer.fromAccount', 'transfer.toAccount', 'tags'];
+    public const array RELATIONS = ['account', 'category.parent', 'transfer.fromAccount', 'transfer.toAccount', 'tags', 'recurringOccurrence'];
 
     public function __construct(Transaction $transaction)
     {
@@ -47,7 +47,7 @@ final class TransactionResource extends JsonResource
                 ->all(),
             'transfer' => $this->transfer(),
             'adjustment_target_cents' => $transaction->adjustment_target_cents,
-            'recurring_template_id' => null,
+            'recurring_template_id' => $transaction->recurringOccurrence?->template_id,
             'attachments_count' => $transaction->attachments_count ?? 0,
             'created_at' => $transaction->created_at?->toIso8601String(),
             'updated_at' => $transaction->updated_at?->toIso8601String(),

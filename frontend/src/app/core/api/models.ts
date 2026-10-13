@@ -419,3 +419,68 @@ export interface DraftListQuery {
   page?: number;
   per_page?: number;
 }
+
+export const RECURRING_FREQUENCIES = ['monthly', 'quarterly', 'yearly'] as const;
+export type RecurringFrequency = (typeof RECURRING_FREQUENCIES)[number];
+export type RecurringType = EntryType;
+
+export interface RecurringTemplate {
+  id: number;
+  name: string;
+  type: RecurringType;
+  amount_cents: number;
+  is_variable: boolean;
+  account: AccountSummary;
+  category: CategorySummary;
+  frequency: RecurringFrequency;
+  day_of_month: number;
+  starts_on: IsoDateString;
+  ends_on: IsoDateString | null;
+  description: string | null;
+  merchant: string | null;
+  note: string | null;
+  paused_at: string | null;
+  next_due_date: IsoDateString | null;
+  created_at: string;
+}
+
+export interface RecurringTemplateInput {
+  name: string;
+  type: RecurringType;
+  amount_cents: number;
+  is_variable: boolean;
+  account_id: number;
+  category_id: number;
+  frequency: RecurringFrequency;
+  day_of_month: number;
+  starts_on: IsoDateString;
+  ends_on: IsoDateString | null;
+  description: string | null;
+  merchant: string | null;
+  note?: string | null;
+}
+
+export type RecurringTemplatePatch = Partial<RecurringTemplateInput>;
+
+export type ForecastStatus = 'upcoming' | 'awaiting_amount' | 'posted' | 'skipped';
+
+export interface ForecastItem {
+  template_id: number;
+  template_name: string;
+  type: RecurringType;
+  due_date: IsoDateString;
+  amount_cents: number;
+  is_variable: boolean;
+  status: ForecastStatus;
+  draft_id: number | null;
+  transaction_id: number | null;
+}
+
+export interface RecurringForecast {
+  period: Period;
+  items: ForecastItem[];
+  pending_expense_cents: number;
+  pending_income_cents: number;
+  posted_expense_cents: number;
+  posted_income_cents: number;
+}

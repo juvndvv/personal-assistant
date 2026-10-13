@@ -10,6 +10,7 @@ import { TransactionsApi } from '../../core/api/transactions.api';
 import { EurPipe } from '../../core/money/eur.pipe';
 import { PageHeader } from '../../shared/layout/page-header';
 import { UiButton, UiEmptyState } from '../../shared/ui';
+import { ForecastCard } from '../recurring/forecast-card';
 import { TransactionRow } from '../transactions/list/transaction-row';
 import { MovementActions } from '../transactions/movement-actions';
 import { MovementSheets } from '../transactions/movement-sheets';
@@ -18,7 +19,7 @@ export const RECENT_MOVEMENTS = 10;
 
 @Component({
   selector: 'app-home-page',
-  imports: [EurPipe, PageHeader, RouterLink, TransactionRow, UiButton, UiEmptyState],
+  imports: [EurPipe, ForecastCard, PageHeader, RouterLink, TransactionRow, UiButton, UiEmptyState],
   providers: [provideIcons({ lucideWallet })],
   template: `
     <app-page-header title="Inicio" />
@@ -66,6 +67,10 @@ export const RECENT_MOVEMENTS = 10;
             Ver cuentas ({{ activeCount() }})
           </a>
         </section>
+
+        <div class="mt-6">
+          <app-forecast-card />
+        </div>
 
         <section class="mt-6" aria-labelledby="recent-heading">
           <div class="mb-3 flex items-baseline justify-between">

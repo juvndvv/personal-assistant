@@ -12,8 +12,10 @@ import { HomePage } from './home.page';
 import { AttachmentsApi } from '../../core/api/attachments.api';
 import { DraftsApi } from '../../core/api/drafts.api';
 import { quietAttachmentsApi, quietDraftsApi } from '../drafts/testing/draft-fixtures';
+import { RecurringApi } from '../../core/api/recurring.api';
+import { aForecast, quietRecurringApi } from '../recurring/testing/recurring-fixtures';
 
-async function setup(accounts: Account[]) {
+async function setup(accounts: Account[], forecast = aForecast({ items: [] })) {
   const list = vi.fn(() => of(accounts));
   const transactions = {
     list: vi.fn(() => of(aPage([aTransaction({ description: 'Pan' }), aTransferLeg()]))),
@@ -21,6 +23,7 @@ async function setup(accounts: Account[]) {
   const view = await render(HomePage, {
     providers: [
       { provide: DraftsApi, useValue: quietDraftsApi() },
+      { provide: RecurringApi, useValue: quietRecurringApi(forecast) },
       { provide: AttachmentsApi, useValue: quietAttachmentsApi() },
       provideRouter([]),
       { provide: AccountsApi, useValue: { list } },
@@ -65,5 +68,13 @@ describe('HomePage', () => {
     expect(transactions.list).toHaveBeenCalledWith({ page: 1, per_page: 10 });
     expect(screen.getByText('Pan')).toBeInTheDocument();
     expect(screen.getByText('BBVA → Ahorro')).toBeInTheDocument();
+  });
+
+  it('shows the recurring items still pending in the current period', async () => {
+    await setup([anAccount({ id: 1 })], aForecast());
+
+    const card = await screen.findByRole('region', { name: 'Fijos pendientes este periodo' });
+    expect(card).toHaveTextContent('Luz');
+    expect(card).toHaveTextContent('Falta el importe');
   });
 });

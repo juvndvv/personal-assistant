@@ -73,6 +73,24 @@ export const routes: Routes = [
           import('./features/transactions/tags/tags.page').then((m) => m.TagsPage),
       },
       {
+        path: 'mas/fijos',
+        title: 'Fijos · Finanzas',
+        loadComponent: () =>
+          import('./features/recurring/recurring.page').then((m) => m.RecurringPage),
+      },
+      {
+        path: 'mas/fijos/nuevo',
+        title: 'Nuevo fijo · Finanzas',
+        loadComponent: () =>
+          import('./features/recurring/recurring-editor.page').then((m) => m.RecurringEditorPage),
+      },
+      {
+        path: 'mas/fijos/:id',
+        title: 'Editar fijo · Finanzas',
+        loadComponent: () =>
+          import('./features/recurring/recurring-editor.page').then((m) => m.RecurringEditorPage),
+      },
+      {
         path: 'mas/ajustes',
         title: 'Ajustes · Finanzas',
         loadComponent: () =>

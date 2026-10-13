@@ -7,6 +7,7 @@ namespace App\Actions\Accounts;
 use App\Enums\AccountType;
 use App\Exceptions\DomainConflict;
 use App\Models\Account;
+use App\Models\RecurringTemplate;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -31,6 +32,7 @@ final class UpdateAccount
 
             if ($account->isDirty('opening_date')) {
                 $this->ensureOpeningDateBeforeMovements($account);
+                $this->stopRecurringBackfillWhenOpeningMovesEarlier($account);
             }
 
             if ($account->type !== AccountType::CreditCard) {
@@ -46,6 +48,25 @@ final class UpdateAccount
 
             return $account;
         });
+    }
+
+    private function stopRecurringBackfillWhenOpeningMovesEarlier(Account $account): void
+    {
+        $previous = $account->getOriginal('opening_date');
+
+        if (! $previous instanceof CarbonImmutable || ! $account->opening_date->lessThan($previous)) {
+            return;
+        }
+
+        RecurringTemplate::query()
+            ->where('account_id', $account->id)
+            ->whereHas('occurrences')
+            ->lockForUpdate()
+            ->get()
+            ->each(function (RecurringTemplate $template): void {
+                $template->stopBackfillBefore(CarbonImmutable::today());
+                $template->save();
+            });
     }
 
     private function ensureOpeningDateBeforeMovements(Account $account): void

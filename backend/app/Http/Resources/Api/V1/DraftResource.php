@@ -14,7 +14,7 @@ use stdClass;
  */
 final class DraftResource extends JsonResource
 {
-    public const array RELATIONS = ['capture.attachments'];
+    public const array RELATIONS = ['capture.attachments', 'recurringOccurrence.template'];
 
     public function __construct(Draft $draft)
     {
@@ -37,13 +37,33 @@ final class DraftResource extends JsonResource
             'field_sources' => $draft->field_sources === [] ? new stdClass : $draft->field_sources,
             'low_confidence_fields' => $draft->low_confidence_fields,
             'capture' => $draft->capture === null ? null : new CaptureResource($draft->capture),
-            'recurring' => null,
+            'recurring' => $this->recurring(),
             'transaction_id' => $draft->transaction_id,
             'transfer_id' => $draft->transfer_id,
             'corrected_fields' => $draft->corrected_fields,
             'confirmed_at' => $draft->confirmed_at?->toIso8601String(),
             'discarded_at' => $draft->discarded_at?->toIso8601String(),
             'created_at' => $draft->created_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @return array{template_id: int, template_name: string, occurrence_id: int, due_date: string, is_variable: bool}|null
+     */
+    private function recurring(): ?array
+    {
+        $occurrence = $this->resource->recurringOccurrence;
+
+        if ($occurrence === null) {
+            return null;
+        }
+
+        return [
+            'template_id' => $occurrence->template_id,
+            'template_name' => $occurrence->template->name,
+            'occurrence_id' => $occurrence->id,
+            'due_date' => $occurrence->due_date->toDateString(),
+            'is_variable' => $occurrence->template->is_variable,
         ];
     }
 }

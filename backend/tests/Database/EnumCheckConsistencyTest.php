@@ -10,6 +10,9 @@ use App\Enums\CategoryKind;
 use App\Enums\DraftOrigin;
 use App\Enums\DraftStatus;
 use App\Enums\DraftType;
+use App\Enums\OccurrenceStatus;
+use App\Enums\RecurringFrequency;
+use App\Enums\RecurringType;
 use App\Enums\TransactionOrigin;
 use App\Enums\TransactionType;
 use App\Enums\TransferKind;
@@ -55,4 +58,7 @@ it('mirrors every enum case in its CHECK constraint', function (string $enum, st
     'draft status' => [DraftStatus::class, 'drafts_status_check'],
     'draft type' => [DraftType::class, 'drafts_type_check'],
     'attachment kind' => [AttachmentKind::class, 'attachments_kind_check'],
+    'recurring frequency' => [RecurringFrequency::class, 'recurring_templates_frequency_check'],
+    'recurring type' => [RecurringType::class, 'recurring_templates_type_check'],
+    'occurrence status' => [OccurrenceStatus::class, 'recurring_occurrences_status_check'],
 ]);

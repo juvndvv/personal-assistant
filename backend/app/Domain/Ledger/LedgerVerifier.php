@@ -24,6 +24,7 @@ final readonly class LedgerVerifier
             ...$this->balanceMismatches(),
             ...$this->danglingConfirmedDrafts(),
             ...$this->orphanAttachments(),
+            ...$this->unbackedOccurrences(),
         ];
     }
 
@@ -204,6 +205,39 @@ final readonly class LedgerVerifier
             ),
             $rows,
         ));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function unbackedOccurrences(): array
+    {
+        $rows = DB::select(<<<'SQL'
+            SELECT o.id, o.status,
+                (SELECT count(*) FROM transactions x WHERE x.recurring_occurrence_id = o.id) AS movements,
+                (SELECT count(*) FROM drafts d WHERE d.recurring_occurrence_id = o.id AND d.status = 'pending') AS pending_drafts
+            FROM recurring_occurrences o
+            WHERE o.status IN ('posted', 'awaiting_amount')
+            ORDER BY o.id
+            SQL);
+
+        $violations = [];
+
+        foreach ($rows as $row) {
+            $id = self::integer($row->id);
+            $movements = self::integer($row->movements);
+            $pendingDrafts = self::integer($row->pending_drafts);
+
+            if ($row->status === 'posted' && $movements !== 1) {
+                $violations[] = sprintf('Recurring occurrence %d is posted but has %d movements.', $id, $movements);
+            }
+
+            if ($row->status === 'awaiting_amount' && $pendingDrafts !== 1) {
+                $violations[] = sprintf('Recurring occurrence %d awaits an amount but has %d pending drafts.', $id, $pendingDrafts);
+            }
+        }
+
+        return $violations;
     }
 
     private static function integer(mixed $value): int

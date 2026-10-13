@@ -286,9 +286,12 @@ When a draft confirmed as a transfer has attachments, they are linked to the tra
 | `merchant` | `varchar(120)` | NULL |
 | `note` | `text` | NULL |
 | `paused_at` | `timestamptz` | NULL |
+| `generate_from` | `date` | NULL (no-backfill floor, always the first day of a month) |
 | `created_at`, `updated_at`, `deleted_at` | `timestamptz` | |
 
 `FOREIGN KEY (category_id, category_kind) REFERENCES categories (id, kind)`.
+
+Generation lower bound: the generator and the forecast only consider slots due on or after the latest of `starts_on`, `generate_from` and the account's `opening_date`. Slots before that bound (like slots after `ends_on`) are neither generated nor listed, and get no occurrence row. `generate_from` is set to the first day of the current month (never moved back) when a template that already has occurrences changes `frequency`, `day_of_month`, `starts_on`, `ends_on` or `account_id`, and when its account's `opening_date` is moved earlier; so those edits never backfill months before the current month. A slot already due in the current month may still be generated.
 
 ### 3.12 `recurring_occurrences` (M4)
 

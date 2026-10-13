@@ -11,7 +11,12 @@ import { Transaction } from '../../../core/api/models';
 import { EurPipe } from '../../../core/money/eur.pipe';
 import { CATEGORY_ICON_SVGS, iconNameFor } from '../../categories/category-appearance';
 import { LedgerReferenceData } from '../reference-data';
-import { transactionAmount, transactionSubtitle, transactionTitle } from '../transaction-display';
+import {
+  TRANSACTION_ORIGIN_LABELS,
+  transactionAmount,
+  transactionSubtitle,
+  transactionTitle,
+} from '../transaction-display';
 
 @Component({
   selector: 'app-transaction-row',
@@ -41,7 +46,16 @@ import { transactionAmount, transactionSubtitle, transactionTitle } from '../tra
           <ng-icon [name]="icon()" size="18" />
         </span>
         <span class="min-w-0 flex-1">
-          <span class="block truncate font-medium text-foreground">{{ title() }}</span>
+          <span class="flex min-w-0 items-center gap-1.5">
+            <span class="truncate font-medium text-foreground">{{ title() }}</span>
+            @if (transaction().origin === 'recurring') {
+              <span
+                class="shrink-0 rounded-md bg-info/15 px-1.5 py-px text-[0.6875rem] font-medium text-info"
+                data-testid="origin-badge"
+                >{{ recurringLabel }}</span
+              >
+            }
+          </span>
           <span class="block truncate text-xs text-muted-foreground">
             {{ subtitle() }}
             @for (tag of transaction().tags; track tag.id) {
@@ -108,6 +122,7 @@ export class TransactionRow {
   readonly edit = output<Transaction>();
   readonly remove = output<Transaction>();
 
+  protected readonly recurringLabel = TRANSACTION_ORIGIN_LABELS.recurring;
   protected readonly title = computed(() => transactionTitle(this.transaction()));
   protected readonly subtitle = computed(() => transactionSubtitle(this.transaction()));
   protected readonly amount = computed(() =>

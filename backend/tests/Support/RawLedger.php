@@ -79,6 +79,42 @@ final class RawLedger
     }
 
     /**
+     * @param  array<string, mixed>  $overrides
+     */
+    public static function recurringTemplate(array $overrides = []): int
+    {
+        return self::insert('recurring_templates', [
+            'name' => 'Template '.uniqid(),
+            'type' => 'expense',
+            'amount_cents' => 6000,
+            'account_id' => array_key_exists('account_id', $overrides) ? $overrides['account_id'] : self::account(),
+            'category_id' => array_key_exists('category_id', $overrides) ? $overrides['category_id'] : self::category(),
+            'frequency' => 'monthly',
+            'day_of_month' => 5,
+            'starts_on' => self::OPENING_DATE,
+            'created_at' => now(),
+            'updated_at' => now(),
+            ...$overrides,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    public static function occurrence(int $templateId, string $slotMonth = '2026-03', array $overrides = []): int
+    {
+        return self::insert('recurring_occurrences', [
+            'template_id' => $templateId,
+            'slot_month' => $slotMonth,
+            'due_date' => $slotMonth.'-05',
+            'status' => 'posted',
+            'created_at' => now(),
+            'updated_at' => now(),
+            ...$overrides,
+        ]);
+    }
+
+    /**
      * @return array{transfer: int, out: int, in: int}
      */
     public static function balancedTransfer(int $fromAccountId, int $toAccountId, int $amountCents = 5000, string $date = '2026-03-01', string $kind = 'transfer'): array

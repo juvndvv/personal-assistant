@@ -11,13 +11,15 @@ E2E_BASE_URL ?= https://localhost$(if $(filter 443,$(HTTPS_PORT)),,:$(HTTPS_PORT
 RUNTIME_IMAGE ?= personal-finance:local
 EMAIL ?=
 NAME ?=
+DATE ?=
 
 COMPOSE := docker compose
 COMPOSE_PROD := docker compose -f compose.yaml -f compose.prod.yaml
 BACKEND_TEST_ENV := DB_HOST=127.0.0.1 DB_PORT=$(DB_HOST_PORT) DB_USERNAME=$(DB_USERNAME) DB_PASSWORD=$(DB_PASSWORD)
 
 .PHONY: help env install up down logs ps config lint lint-pins lint-backend lint-frontend \
-	test test-backend test-frontend build build-frontend build-image smoke e2e user trust-ca verify-ledger
+	test test-backend test-frontend build build-frontend build-image smoke e2e user trust-ca verify-ledger \
+	recurring schedule
 
 help:
 	@grep -hE '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -96,6 +98,12 @@ trust-ca: ## Export Caddy's local root CA to .caddy/root.crt and trust it on mac
 	else \
 		echo "Install .caddy/root.crt in your trust store (see docs/ops/local-https.md)"; \
 	fi
+
+recurring: ## Generate due recurring movements: make recurring [DATE=YYYY-MM-DD]
+	$(COMPOSE) exec web php artisan app:recurring:generate $(if $(DATE),--date="$(DATE)")
+
+schedule: ## List the scheduled tasks in Europe/Madrid time
+	$(COMPOSE) exec scheduler php artisan schedule:list --timezone=Europe/Madrid
 
 verify-ledger: ## Check ledger invariants (php artisan app:ledger:verify)
 	$(COMPOSE) exec web php artisan app:ledger:verify

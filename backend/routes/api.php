@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\V1\CategoriesController;
 use App\Http\Controllers\Api\V1\DraftsController;
 use App\Http\Controllers\Api\V1\PeriodsController;
 use App\Http\Controllers\Api\V1\QuickAddController;
+use App\Http\Controllers\Api\V1\RecurringForecastController;
+use App\Http\Controllers\Api\V1\RecurringTemplatesController;
 use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\TagsController;
 use App\Http\Controllers\Api\V1\TransactionsController;
@@ -73,6 +75,15 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('transactions/{transaction}/attachments', [AttachmentsController::class, 'store'])
         ->whereNumber('transaction')
         ->name('transactions.attachments.store');
+    Route::apiResource('recurring-templates', RecurringTemplatesController::class)->whereNumber('recurring_template');
+    Route::post('recurring-templates/{recurring_template}/pause', [RecurringTemplatesController::class, 'pause'])
+        ->whereNumber('recurring_template')
+        ->name('recurring-templates.pause');
+    Route::post('recurring-templates/{recurring_template}/resume', [RecurringTemplatesController::class, 'resume'])
+        ->whereNumber('recurring_template')
+        ->name('recurring-templates.resume');
+    Route::get('recurring/forecast', [RecurringForecastController::class, 'show'])->name('recurring.forecast');
+
     Route::get('attachments/{attachment}', [AttachmentsController::class, 'show'])->name('attachments.show');
     Route::delete('attachments/{attachment}', [AttachmentsController::class, 'destroy'])->name('attachments.destroy');
 });

@@ -37,12 +37,14 @@ use Illuminate\Support\Facades\DB;
  * @property int|null $transfer_id
  * @property TransferLeg|null $transfer_leg
  * @property int|null $adjustment_target_cents
+ * @property int|null $recurring_occurrence_id
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $deleted_at
  * @property-read Account $account
  * @property-read Category|null $category
  * @property-read Transfer|null $transfer
+ * @property-read RecurringOccurrence|null $recurringOccurrence
  * @property-read Collection<int, Tag> $tags
  * @property-read Collection<int, Attachment> $attachments
  * @property-read int|null $attachments_count
@@ -87,6 +89,14 @@ final class Transaction extends Model
     public function transfer(): BelongsTo
     {
         return $this->belongsTo(Transfer::class)->withTrashed();
+    }
+
+    /**
+     * @return BelongsTo<RecurringOccurrence, $this>
+     */
+    public function recurringOccurrence(): BelongsTo
+    {
+        return $this->belongsTo(RecurringOccurrence::class);
     }
 
     /**
@@ -180,6 +190,7 @@ final class Transaction extends Model
             'transfer_id' => 'integer',
             'transfer_leg' => TransferLeg::class,
             'adjustment_target_cents' => 'integer',
+            'recurring_occurrence_id' => 'integer',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
             'deleted_at' => 'immutable_datetime',

@@ -54,6 +54,8 @@ To use the app from a phone over the LAN or Tailscale, trust Caddy's local CA as
 | `make e2e` | Playwright journeys against the running stack (`E2E_BASE_URL`) |
 | `make config` | Validates the dev and prod compose configurations |
 | `make verify-ledger` | `php artisan app:ledger:verify` inside `web` |
+| `make recurring [DATE=YYYY-MM-DD]` | Generate due recurring movements now (or as of `DATE`) inside `web`; idempotent |
+| `make schedule` | `php artisan schedule:list` in Europe/Madrid (`app:drafts:purge` 03:30, `app:recurring:generate` 06:00) |
 
 Xdebug is installed in the dev image and off by default; start it with `XDEBUG_MODE=debug make up`.
 

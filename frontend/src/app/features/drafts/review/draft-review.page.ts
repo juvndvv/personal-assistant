@@ -40,7 +40,7 @@ import { MovementSheets } from '../../transactions/movement-sheets';
 import { LedgerReferenceData } from '../../transactions/reference-data';
 import { TagInput } from '../../transactions/tag-input/tag-input';
 import { transferKindBetween } from '../../transfers/transfer-kind';
-import { DRAFT_ORIGIN_LABEL } from '../draft-display';
+import { DRAFT_NOT_PENDING_MESSAGE, DRAFT_ORIGIN_LABEL } from '../draft-display';
 import { PendingDrafts } from '../pending-drafts';
 import { ReviewField } from './review-field';
 
@@ -56,7 +56,7 @@ const MERCHANT_MAX = 120;
 export const REVIEW_MESSAGES = {
   failed:
     'No pudimos analizar la captura automáticamente. Completa los datos a mano antes de confirmar.',
-  notPending: 'Este borrador ya se confirmó o se descartó.',
+  notPending: DRAFT_NOT_PENDING_MESSAGE,
   loadFailed: 'No se pudo cargar el borrador.',
 } as const;
 

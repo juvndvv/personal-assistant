@@ -5,6 +5,7 @@ import {
   lucideChevronRight,
   lucideFolderTree,
   lucideInbox,
+  lucideRepeat,
   lucideSettings,
   lucideTags,
   lucideWallet,
@@ -24,8 +25,14 @@ const MORE_LINKS: readonly MoreLink[] = [
   {
     path: '/pendientes',
     label: 'Pendientes',
-    description: 'Borradores de voz y foto por revisar.',
+    description: 'Borradores de voz, foto y fijos variables por revisar.',
     icon: 'lucideInbox',
+  },
+  {
+    path: '/mas/fijos',
+    label: 'Fijos',
+    description: 'Nómina, alquiler y facturas que se registran solos.',
+    icon: 'lucideRepeat',
   },
   {
     path: '/cuentas',
@@ -61,6 +68,7 @@ const MORE_LINKS: readonly MoreLink[] = [
       lucideChevronRight,
       lucideFolderTree,
       lucideInbox,
+      lucideRepeat,
       lucideSettings,
       lucideTags,
       lucideWallet,

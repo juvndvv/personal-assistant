@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property DraftOrigin $origin
  * @property DraftStatus $status
  * @property string|null $capture_id
+ * @property int|null $recurring_occurrence_id
  * @property DraftType|null $type
  * @property int|null $amount_cents
  * @property CarbonImmutable|null $date
@@ -37,6 +38,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property-read Capture|null $capture
+ * @property-read RecurringOccurrence|null $recurringOccurrence
  */
 final class Draft extends Model
 {
@@ -85,6 +87,14 @@ final class Draft extends Model
     }
 
     /**
+     * @return BelongsTo<RecurringOccurrence, $this>
+     */
+    public function recurringOccurrence(): BelongsTo
+    {
+        return $this->belongsTo(RecurringOccurrence::class);
+    }
+
+    /**
      * @param  Builder<self>  $query
      */
     #[Scope]
@@ -111,6 +121,7 @@ final class Draft extends Model
             'field_sources' => 'array',
             'low_confidence_fields' => 'array',
             'corrected_fields' => 'array',
+            'recurring_occurrence_id' => 'integer',
             'transaction_id' => 'integer',
             'transfer_id' => 'integer',
             'confirmed_at' => 'immutable_datetime',

@@ -7,6 +7,7 @@ namespace App\Actions\Categories;
 use App\Exceptions\DomainConflict;
 use App\Models\Category;
 use App\Models\Draft;
+use App\Models\RecurringTemplate;
 use Illuminate\Support\Facades\DB;
 
 final class DeleteCategory
@@ -21,7 +22,7 @@ final class DeleteCategory
                 );
             }
 
-            if ($category->transactions()->withTrashed()->exists() || Draft::query()->pending()->where('category_id', $category->id)->exists()) {
+            if ($this->isInUse($category)) {
                 throw new DomainConflict(
                     'category_in_use',
                     'La categoría está en uso. Archívala en su lugar.',
@@ -30,5 +31,12 @@ final class DeleteCategory
 
             $category->delete();
         });
+    }
+
+    private function isInUse(Category $category): bool
+    {
+        return $category->transactions()->withTrashed()->exists()
+            || Draft::query()->pending()->where('category_id', $category->id)->exists()
+            || RecurringTemplate::withTrashed()->where('category_id', $category->id)->exists();
     }
 }

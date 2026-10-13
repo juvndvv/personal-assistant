@@ -2,12 +2,16 @@
 
 declare(strict_types=1);
 
+use App\Actions\Recurring\GenerateRecurringTransactions;
 use App\Enums\DraftStatus;
+use App\Enums\OccurrenceStatus;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Capture;
 use App\Models\Category;
 use App\Models\Draft;
+use App\Models\RecurringOccurrence;
+use App\Models\RecurringTemplate;
 use App\Models\Setting;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -71,6 +75,20 @@ it('honours the configured orphan TTL', function (): void {
     $this->travel(2)->days();
     $this->artisan('app:drafts:purge')->assertSuccessful();
     expect($draft->refresh()->status)->toBe(DraftStatus::Discarded);
+});
+
+it('never purges a pending recurring draft, however old', function (): void {
+    RecurringTemplate::factory()->variable()->create([
+        'account_id' => $this->checking->id, 'category_id' => $this->groceries->id, 'starts_on' => day('2026-10-01'),
+    ]);
+    app(GenerateRecurringTransactions::class)->handle(day('2026-10-05'));
+    $draft = Draft::query()->sole();
+
+    $this->travel(Setting::current()->orphan_draft_ttl_days + 30)->days();
+    $this->artisan('app:drafts:purge')->assertSuccessful();
+
+    expect($draft->refresh()->status)->toBe(DraftStatus::Pending)
+        ->and(RecurringOccurrence::query()->sole()->status)->toBe(OccurrenceStatus::AwaitingAmount);
 });
 
 it('cleans up captures that never got a draft', function (): void {
