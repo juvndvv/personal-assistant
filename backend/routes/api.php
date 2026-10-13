@@ -6,7 +6,11 @@ use App\Http\Controllers\Api\V1\AccountsController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CategoriesController;
 use App\Http\Controllers\Api\V1\PeriodsController;
+use App\Http\Controllers\Api\V1\QuickAddController;
 use App\Http\Controllers\Api\V1\SettingsController;
+use App\Http\Controllers\Api\V1\TagsController;
+use App\Http\Controllers\Api\V1\TransactionsController;
+use App\Http\Controllers\Api\V1\TransfersController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('auth/login', [AuthController::class, 'login'])
@@ -32,8 +36,23 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('accounts/{account}/unarchive', [AccountsController::class, 'unarchive'])->name('accounts.unarchive');
     Route::get('accounts/{account}/balance', [AccountsController::class, 'balance'])->name('accounts.balance');
     Route::post('accounts/{account}/adjustments', [AccountsController::class, 'storeAdjustment'])->name('accounts.adjustments.store');
+    Route::get('accounts/{account}/settlement-suggestion', [AccountsController::class, 'settlementSuggestion'])->name('accounts.settlement-suggestion');
 
     Route::apiResource('categories', CategoriesController::class)->except(['show']);
     Route::post('categories/{category}/archive', [CategoriesController::class, 'archive'])->name('categories.archive');
     Route::post('categories/{category}/unarchive', [CategoriesController::class, 'unarchive'])->name('categories.unarchive');
+
+    Route::get('quick-add/defaults', [QuickAddController::class, 'defaults'])->name('quick-add.defaults');
+
+    Route::apiResource('transactions', TransactionsController::class);
+    Route::post('transactions/{transaction}/restore', [TransactionsController::class, 'restore'])
+        ->withTrashed()
+        ->name('transactions.restore');
+
+    Route::apiResource('transfers', TransfersController::class)->except(['index']);
+    Route::post('transfers/{transfer}/restore', [TransfersController::class, 'restore'])
+        ->withTrashed()
+        ->name('transfers.restore');
+
+    Route::apiResource('tags', TagsController::class)->except(['show']);
 });

@@ -15,7 +15,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     exact: false,
     primary: false,
   },
-  { path: '/capturar', label: 'Capturar', icon: 'lucidePlus', exact: false, primary: true },
+  {
+    path: '/capturar',
+    label: 'Añadir movimiento',
+    icon: 'lucidePlus',
+    exact: false,
+    primary: true,
+  },
   { path: '/informes', label: 'Informes', icon: 'lucideChartPie', exact: false, primary: false },
   { path: '/mas', label: 'Más', icon: 'lucideEllipsis', exact: false, primary: false },
 ];

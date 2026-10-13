@@ -10,6 +10,7 @@ import {
   BalanceAdjustmentInput,
   DataEnvelope,
   IsoDateString,
+  SettlementSuggestion,
   Transaction,
 } from './models';
 
@@ -70,6 +71,15 @@ export class AccountsApi {
   adjust(id: number, input: BalanceAdjustmentInput): Observable<Transaction> {
     return this.http
       .post<DataEnvelope<Transaction>>(`${ACCOUNTS}/${id}/adjustments`, input)
+      .pipe(map((response) => response.data));
+  }
+
+  settlementSuggestion(id: number, date?: IsoDateString): Observable<SettlementSuggestion> {
+    const params = date === undefined ? new HttpParams() : new HttpParams().set('date', date);
+    return this.http
+      .get<DataEnvelope<SettlementSuggestion>>(`${ACCOUNTS}/${id}/settlement-suggestion`, {
+        params,
+      })
       .pipe(map((response) => response.data));
   }
 }

@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Enums\TransferKind;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -23,6 +24,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $deleted_at
+ * @property-read Account $fromAccount
+ * @property-read Account $toAccount
+ * @property-read Collection<int, Transaction> $legs
  */
 #[Fillable(['kind', 'from_account_id', 'to_account_id', 'amount_cents', 'date', 'note'])]
 final class Transfer extends Model

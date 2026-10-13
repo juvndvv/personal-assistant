@@ -5,6 +5,7 @@ import {
   lucideChevronRight,
   lucideFolderTree,
   lucideSettings,
+  lucideTags,
   lucideWallet,
 } from '@ng-icons/lucide';
 import { AuthStore } from '../../core/auth/auth.store';
@@ -32,6 +33,12 @@ const MORE_LINKS: readonly MoreLink[] = [
     icon: 'lucideFolderTree',
   },
   {
+    path: '/mas/etiquetas',
+    label: 'Etiquetas',
+    description: 'Renombra o elimina las etiquetas de tus movimientos.',
+    icon: 'lucideTags',
+  },
+  {
     path: '/mas/ajustes',
     label: 'Ajustes',
     description: 'Inicio del mes, cuenta por defecto y borradores.',
@@ -42,7 +49,15 @@ const MORE_LINKS: readonly MoreLink[] = [
 @Component({
   selector: 'app-more-page',
   imports: [NgIcon, PageHeader, RouterLink, UiButton],
-  providers: [provideIcons({ lucideChevronRight, lucideFolderTree, lucideSettings, lucideWallet })],
+  providers: [
+    provideIcons({
+      lucideChevronRight,
+      lucideFolderTree,
+      lucideSettings,
+      lucideTags,
+      lucideWallet,
+    }),
+  ],
   template: `
     <app-page-header title="Más" subtitle="Cuentas, categorías, ajustes y sesión." />
     <nav aria-label="Más opciones" class="mb-6">

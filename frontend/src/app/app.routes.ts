@@ -31,7 +31,7 @@ export const routes: Routes = [
         path: 'movimientos',
         title: 'Movimientos · Finanzas',
         loadComponent: () =>
-          import('./features/movements/movements.page').then((m) => m.MovementsPage),
+          import('./features/transactions/list/transactions.page').then((m) => m.TransactionsPage),
       },
       {
         path: 'capturar',
@@ -53,6 +53,12 @@ export const routes: Routes = [
         title: 'Categorías · Finanzas',
         loadComponent: () =>
           import('./features/categories/categories.page').then((m) => m.CategoriesPage),
+      },
+      {
+        path: 'mas/etiquetas',
+        title: 'Etiquetas · Finanzas',
+        loadComponent: () =>
+          import('./features/transactions/tags/tags.page').then((m) => m.TagsPage),
       },
       {
         path: 'mas/ajustes',

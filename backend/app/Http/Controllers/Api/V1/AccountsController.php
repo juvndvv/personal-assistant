@@ -9,15 +9,18 @@ use App\Actions\Accounts\CreateAccount;
 use App\Actions\Accounts\DeleteAccount;
 use App\Actions\Accounts\UnarchiveAccount;
 use App\Actions\Accounts\UpdateAccount;
+use App\Actions\Cards\SuggestCardSettlement;
 use App\Actions\Ledger\RecordBalanceAdjustment;
 use App\Domain\Ledger\BalanceCalculator;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\AccountBalanceRequest;
 use App\Http\Requests\Api\V1\IndexAccountsRequest;
+use App\Http\Requests\Api\V1\SettlementSuggestionRequest;
 use App\Http\Requests\Api\V1\StoreAccountRequest;
 use App\Http\Requests\Api\V1\StoreBalanceAdjustmentRequest;
 use App\Http\Requests\Api\V1\UpdateAccountRequest;
 use App\Http\Resources\Api\V1\AccountResource;
+use App\Http\Resources\Api\V1\CardSettlementSuggestionResource;
 use App\Http\Resources\Api\V1\TransactionResource;
 use App\Models\Account;
 use Illuminate\Http\JsonResponse;
@@ -95,9 +98,14 @@ final class AccountsController extends Controller
             $request->note(),
         );
 
-        return (new TransactionResource($adjustment->load(['account', 'category.parent', 'transfer', 'tags'])))
+        return (new TransactionResource($adjustment->load(TransactionResource::RELATIONS)))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
+    }
+
+    public function settlementSuggestion(SettlementSuggestionRequest $request, Account $account, SuggestCardSettlement $suggestCardSettlement): CardSettlementSuggestionResource
+    {
+        return new CardSettlementSuggestionResource($suggestCardSettlement->handle($account, $request->suggestionDate()));
     }
 
     private function resource(Account $account): AccountResource

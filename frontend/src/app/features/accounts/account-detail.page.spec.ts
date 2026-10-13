@@ -4,6 +4,10 @@ import { render, screen } from '@testing-library/angular';
 import userEvent from '@testing-library/user-event';
 import { of, throwError } from 'rxjs';
 import { AccountsApi } from '../../core/api/accounts.api';
+import { CategoriesApi } from '../../core/api/categories.api';
+import { TransactionsApi } from '../../core/api/transactions.api';
+import { aPage } from '../transactions/testing/feed-fakes';
+import { aTransaction } from '../transactions/testing/transaction-fixtures';
 import { Account, Transaction } from '../../core/api/models';
 import { todayInMadrid } from '../../core/date/iso-date';
 import { UiToast } from '../../shared/ui';
@@ -36,22 +40,29 @@ function anAdjustment(signed: number, target: number): Transaction {
 async function setup(account: Account = anAccount({ id: 1, balance_cents: 100000 })) {
   const api = {
     get: vi.fn(() => of(account)),
+    list: vi.fn(() => of([account])),
+    settlementSuggestion: vi.fn(),
     archive: vi.fn(() => of({ ...account, archived_at: '2026-10-13T10:00:00+02:00' })),
     unarchive: vi.fn(() => of({ ...account, archived_at: null })),
     delete: vi.fn(),
     adjust: vi.fn(),
   };
+  const transactionsApi = {
+    list: vi.fn(() => of(aPage([aTransaction({ description: 'Pan del día' })]))),
+  };
   const view = await render(AccountDetailPage, {
     providers: [
       provideRouter([]),
       { provide: AccountsApi, useValue: api },
+      { provide: CategoriesApi, useValue: { list: () => of([]) } },
+      { provide: TransactionsApi, useValue: transactionsApi },
       { provide: UiToast, useValue: { success: vi.fn(), error: vi.fn() } },
     ],
     inputs: { id: String(account.id) },
   });
   const router = view.fixture.debugElement.injector.get(Router);
   vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
-  return { api, user: userEvent.setup() };
+  return { api, transactionsApi, user: userEvent.setup() };
 }
 
 describe('AccountDetailPage', () => {
@@ -150,5 +161,19 @@ describe('AccountDetailPage', () => {
 
     expect(api.unarchive).toHaveBeenCalledWith(1);
     expect(await screen.findByRole('button', { name: 'Archivar' })).toBeInTheDocument();
+  });
+
+  it('lists the account movements with signed amounts', async () => {
+    const { transactionsApi } = await setup(anAccount({ id: 4 }));
+
+    expect(await screen.findByText('Pan del día')).toBeInTheDocument();
+    expect(transactionsApi.list).toHaveBeenCalledWith({ account_id: [4], page: 1, per_page: 50 });
+    expect(screen.getByTestId('transaction-amount')).toHaveTextContent('-23,50 €');
+  });
+
+  it('offers card settlement only for credit cards', async () => {
+    await setup(anAccount({ id: 1, type: 'checking' }));
+    await screen.findByRole('button', { name: 'Ajustar saldo' });
+    expect(screen.queryByRole('button', { name: 'Liquidar tarjeta' })).not.toBeInTheDocument();
   });
 });

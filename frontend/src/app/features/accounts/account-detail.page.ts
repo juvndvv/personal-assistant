@@ -8,21 +8,35 @@ import {
   signal,
 } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { firstValueFrom, skip } from 'rxjs';
 import { AccountsApi } from '../../core/api/accounts.api';
 import { conflictCode, serverMessage } from '../../core/api/api-error';
-import { Account } from '../../core/api/models';
+import { Account, TransactionListQuery } from '../../core/api/models';
 import { EurPipe } from '../../core/money/eur.pipe';
 import { UiBadge, UiButton, UiDialog, UiDialogFooter, UiToast } from '../../shared/ui';
 import { ACCOUNT_TYPE_LABELS, isArchived, lastUpdatedLabel } from './account-types';
+import { TransactionFeed } from '../transactions/list/transaction-feed';
+import { MovementSheets } from '../transactions/movement-sheets';
 import { AdjustBalanceSheet } from './adjust-balance-sheet';
+import { SettleCardSheet } from './settle-card-sheet';
 
 const HAS_MOVEMENTS_MESSAGE =
   'Esta cuenta tiene movimientos y no se puede eliminar. Archívala para ocultarla sin perder su historial.';
 
 @Component({
   selector: 'app-account-detail-page',
-  imports: [AdjustBalanceSheet, EurPipe, RouterLink, UiBadge, UiButton, UiDialog, UiDialogFooter],
+  imports: [
+    AdjustBalanceSheet,
+    EurPipe,
+    RouterLink,
+    SettleCardSheet,
+    TransactionFeed,
+    UiBadge,
+    UiButton,
+    UiDialog,
+    UiDialogFooter,
+  ],
   template: `
     <a routerLink="/cuentas" class="mb-4 inline-block text-sm text-primary hover:underline">
       ← Cuentas
@@ -77,8 +91,24 @@ const HAS_MOVEMENTS_MESSAGE =
           </dl>
         }
         <div class="mt-5 flex flex-wrap gap-2">
-          <ui-button [disabled]="archived()" (clicked)="adjustOpen.set(true)">
+          @if (current.type === 'credit_card') {
+            <ui-button [disabled]="archived()" (clicked)="settleOpen.set(true)">
+              Liquidar tarjeta
+            </ui-button>
+          }
+          <ui-button
+            [variant]="current.type === 'credit_card' ? 'outline' : 'primary'"
+            [disabled]="archived()"
+            (clicked)="adjustOpen.set(true)"
+          >
             Ajustar saldo
+          </ui-button>
+          <ui-button
+            variant="outline"
+            [disabled]="archived()"
+            (clicked)="sheets.openNewTransfer(current.id)"
+          >
+            Transferir
           </ui-button>
           <ui-button variant="outline" (clicked)="edit()">Editar</ui-button>
           @if (archived()) {
@@ -94,7 +124,25 @@ const HAS_MOVEMENTS_MESSAGE =
         </div>
       </section>
 
-      <app-adjust-balance-sheet [(open)]="adjustOpen" [account]="current" (adjusted)="reload()" />
+      <section aria-labelledby="account-movements-heading" class="mb-6">
+        <h2 id="account-movements-heading" class="mb-3 text-lg font-semibold text-foreground">
+          Movimientos
+        </h2>
+        <app-transaction-feed
+          [query]="movementsQuery()"
+          [accountScoped]="true"
+          emptyDescription="Esta cuenta aún no tiene movimientos."
+        />
+      </section>
+
+      <app-adjust-balance-sheet
+        [(open)]="adjustOpen"
+        [account]="current"
+        (adjusted)="sheets.notifyChanged()"
+      />
+      @if (current.type === 'credit_card') {
+        <app-settle-card-sheet [(open)]="settleOpen" [card]="current" />
+      }
 
       <ui-dialog
         [(open)]="deleteOpen"
@@ -132,7 +180,12 @@ export class AccountDetailPage implements OnInit {
   protected readonly settlementName = signal('Sin cuenta de pago');
   protected readonly loadFailed = signal(false);
   protected readonly busy = signal(false);
+  protected readonly sheets = inject(MovementSheets);
   protected readonly adjustOpen = signal(false);
+  protected readonly settleOpen = signal(false);
+  protected readonly movementsQuery = computed<TransactionListQuery>(() => ({
+    account_id: [Number(this.id())],
+  }));
   protected readonly deleteOpen = signal(false);
   protected readonly deleteError = signal<string | null>(null);
   protected readonly hasMovements = signal(false);
@@ -149,6 +202,12 @@ export class AccountDetailPage implements OnInit {
     const account = this.account();
     return account === null ? '' : lastUpdatedLabel(account);
   });
+
+  constructor() {
+    toObservable(this.sheets.changes)
+      .pipe(skip(1), takeUntilDestroyed())
+      .subscribe(() => void this.reload());
+  }
 
   ngOnInit(): void {
     void this.reload();

@@ -14,6 +14,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 final class TransactionResource extends JsonResource
 {
+    public const array RELATIONS = ['account', 'category.parent', 'transfer.fromAccount', 'transfer.toAccount', 'tags'];
+
     public function __construct(Transaction $transaction)
     {
         parent::__construct($transaction);
@@ -38,7 +40,11 @@ final class TransactionResource extends JsonResource
             'merchant' => $transaction->merchant,
             'note' => $transaction->note,
             'origin' => $transaction->origin->value,
-            'tags' => $transaction->tags->map(fn (Tag $tag): array => ['id' => $tag->id, 'name' => $tag->name])->all(),
+            'tags' => $transaction->tags
+                ->sortBy('name')
+                ->map(fn (Tag $tag): array => ['id' => $tag->id, 'name' => $tag->name])
+                ->values()
+                ->all(),
             'transfer' => $this->transfer(),
             'adjustment_target_cents' => $transaction->adjustment_target_cents,
             'recurring_template_id' => null,
@@ -68,7 +74,7 @@ final class TransactionResource extends JsonResource
             'id' => $transfer->id,
             'kind' => $transfer->kind->value,
             'leg' => $transaction->transfer_leg->value,
-            'counter_account' => $counterAccount === null ? null : new AccountSummaryResource($counterAccount),
+            'counter_account' => new AccountSummaryResource($counterAccount),
         ];
     }
 }

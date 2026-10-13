@@ -14,11 +14,13 @@ import { AuthStore } from '../../core/auth/auth.store';
 import { AppUpdates } from '../../core/pwa/app-updates';
 import { ConnectivityStatus } from '../../core/pwa/connectivity-status';
 import { UiToast } from '../../shared/ui';
+import { MovementSheets } from '../transactions/movement-sheets';
+import { MovementSheetsHost } from '../transactions/movement-sheets-host';
 import { NAV_ITEMS } from './nav-items';
 
 @Component({
   selector: 'app-shell-layout',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, NgIcon],
+  imports: [MovementSheetsHost, RouterOutlet, RouterLink, RouterLinkActive, NgIcon],
   providers: [
     provideIcons({
       lucideArrowLeftRight,
@@ -38,15 +40,26 @@ import { NAV_ITEMS } from './nav-items';
       <p class="px-3 text-lg font-semibold text-primary">Finanzas</p>
       <nav class="mt-8 flex flex-1 flex-col gap-1" aria-label="Navegación principal">
         @for (item of navItems; track item.path) {
-          <a
-            [routerLink]="item.path"
-            routerLinkActive="bg-primary/10 text-primary"
-            [routerLinkActiveOptions]="{ exact: item.exact }"
-            class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-          >
-            <ng-icon [name]="item.icon" size="20" aria-hidden="true" />
-            {{ item.label }}
-          </a>
+          @if (item.primary) {
+            <button
+              type="button"
+              class="flex items-center gap-3 rounded-xl px-3 py-2 text-start text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              (click)="sheets.openQuickAdd()"
+            >
+              <ng-icon [name]="item.icon" size="20" aria-hidden="true" />
+              {{ item.label }}
+            </button>
+          } @else {
+            <a
+              [routerLink]="item.path"
+              routerLinkActive="bg-primary/10 text-primary"
+              [routerLinkActiveOptions]="{ exact: item.exact }"
+              class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              <ng-icon [name]="item.icon" size="20" aria-hidden="true" />
+              {{ item.label }}
+            </a>
+          }
         }
       </nav>
       <div class="border-t border-border pt-4">
@@ -85,13 +98,14 @@ import { NAV_ITEMS } from './nav-items';
         @for (item of navItems; track item.path) {
           <li class="flex justify-center">
             @if (item.primary) {
-              <a
-                [routerLink]="item.path"
+              <button
+                type="button"
                 class="-mt-5 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-4 ring-background"
                 [attr.aria-label]="item.label"
+                (click)="sheets.openQuickAdd()"
               >
                 <ng-icon [name]="item.icon" size="28" aria-hidden="true" />
-              </a>
+              </button>
             } @else {
               <a
                 [routerLink]="item.path"
@@ -107,6 +121,8 @@ import { NAV_ITEMS } from './nav-items';
         }
       </ul>
     </nav>
+
+    <app-movement-sheets-host />
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -114,6 +130,7 @@ export class ShellLayout {
   protected readonly authStore = inject(AuthStore);
   protected readonly connectivity = inject(ConnectivityStatus);
   protected readonly navItems = NAV_ITEMS;
+  protected readonly sheets = inject(MovementSheets);
   private readonly appUpdates = inject(AppUpdates);
   private readonly toast = inject(UiToast);
 

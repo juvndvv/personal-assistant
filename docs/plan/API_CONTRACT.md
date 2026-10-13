@@ -403,7 +403,7 @@ Errors: 422 `errors.target_balance_cents` when the delta is 0; 422 `errors.date`
 } }
 ```
 
-Rules: with `statement_day = d`, `statement_end` is the latest date ≤ `date` with day `d`; `statement_start` is the day after the previous one. `suggested_cents = max(0, −balance_at(statement_end) − settlements dated in (statement_end, date])`. Without `statement_day`, `statement_start`/`statement_end` are null and `suggested_cents = max(0, −balance_at(date))`. `from_account_id` is the card's `settlement_account_id` (or `settings.default_account_id`).
+Rules: with `statement_day = d`, `statement_end` is the latest date ≤ `date` with day `d`; `statement_start` is the day after the previous one. `suggested_cents = max(0, −balance_at(statement_end) − settlements dated in (statement_end, date])`, where settlements are live `card_settlement` transfers into the card and `settled_since_cents` is that sum. Without `statement_day`, `statement_start`/`statement_end` are null and `suggested_cents = max(0, −balance_at(date))`. `from_account_id` is the card's `settlement_account_id` (or `settings.default_account_id` when it is a writable non-card account; otherwise null).
 Errors: 409 `not_a_credit_card`.
 
 ### 3.5 Categories (M1)
@@ -466,7 +466,9 @@ Query parameters (all optional, combined with AND; multi-value parameters OR wit
 | `page`, `per_page` | Pagination |
 
 Transfer collapsing: without `account_id[]`, each transfer appears once (its `out` leg, with `counter_account`). With `account_id[]`, the legs on the selected accounts are returned.
-Response 200 paginated `Transaction` list, plus `meta.totals`: `{ "income_cents": 0, "expense_cents": 0 }` over the whole filtered set (reportable rows only).
+Response 200 paginated `Transaction` list, plus `meta.totals`: `{ "income_cents": 0, "expense_cents": 0 }` over the whole filtered set (reportable rows only). Both totals are unsigned magnitudes.
+
+Details (M2): `q` is matched literally (`%` and `_` are not wildcards) and must be valid UTF-8; transfer legs carry the transfer's `note`, so `q` also finds transfers. `amount`/`-amount` sort on the magnitude (ties by `-id`). `period` must be a valid label. `date_to` before `date_from`, `amount_max_cents` below `amount_min_cents`, or `per_page` outside 1..100 return 422. Until attachments exist (M3), `has_attachments=1` returns no rows and `has_attachments=0` filters nothing.
 
 #### `POST /api/v1/transactions` (RF-02; draft confirm from M3)
 
@@ -487,7 +489,7 @@ Request:
 }
 ```
 
-Validation: `type` in `expense|income`; `amount_cents` integer 1..99_999_999_99; `date` defaults to today, not before the account's `opening_date`, not more than 366 days in the future; `account_id` defaults to the quick-add default account and must be writable; `category_id` required, non-archived, kind = `type`; `tags` array of up to 10 strings 1..40 chars (find-or-create, case-insensitive); `draft_id` optional (M3+), must be `pending`.
+Validation: `type` in `expense|income`; `amount_cents` integer 1..99_999_999_99; `date` (omitted or null) defaults to today, not before the account's `opening_date`, not more than 366 days in the future; `account_id` defaults to the quick-add default account and must be writable; `category_id` required, non-archived, kind = `type`; `tags` array of up to 10 strings 1..40 chars (find-or-create, case-insensitive); `draft_id` optional (M3+), must be `pending` (before M3 any non-null `draft_id` returns 422 `errors.draft_id`). Domain validation of the account, category and date is reported as 422 on `account_id`, `category_id` and `date`.
 Effects: creates the row with `origin = manual`, or the draft's origin when `draft_id` is set; sets `settings.last_used_account_id`; with `draft_id`: in the same DB transaction marks the draft `confirmed`, stores `corrected_fields` (proposal fields whose submitted value differs), links capture attachments to the new transaction, and, for recurring drafts (M4), marks the occurrence `posted`; learns a categorization hint (M7).
 Response 201 `{ "data": Transaction }`.
 Errors: 422; 409 `draft_not_pending`.
@@ -497,7 +499,8 @@ Errors: 422; 409 `draft_not_pending`.
 #### `PATCH /api/v1/transactions/{id}`
 
 - Expense/income rows: any of `type` (`expense|income`, re-signs the amount and requires a matching category), `amount_cents`, `date`, `account_id`, `category_id`, `description`, `merchant`, `note`, `tags` (replaces the set).
-- Adjustment rows: `date`, `target_balance_cents`, `note`; the delta is recomputed excluding the row itself (422 if it becomes 0).
+- Adjustment rows: `date`, `target_balance_cents`, `note`; the delta is recomputed excluding the row itself (422 if it becomes 0; `date` must not be in the future or before the account's `opening_date`). Other fields are ignored.
+- An already assigned archived category may be kept; switching to an archived category, or to an archived account, returns 422.
 - Transfer legs: 409 `transfer_leg_immutable`.
 
 Response 200 `{ "data": Transaction }`.
@@ -523,7 +526,9 @@ Response 201 `{ "data": Transfer }`.
 
 #### `PATCH /api/v1/transfers/{id}`
 
-Fields: `from_account_id`, `to_account_id`, `amount_cents`, `date`, `note`, `kind`. Both legs are rewritten in place atomically. 200.
+Fields: `from_account_id`, `to_account_id`, `amount_cents`, `date`, `note`, `kind`. Both legs are rewritten in place atomically (same leg ids). Only an account that changes must be writable. 200.
+
+`Transfer.origin` is the origin of its legs. `POST /transfers/{id}/restore` returns 422 (`errors.from_account_id` / `errors.to_account_id`) when either account is now archived; restoring a live transfer is a no-op.
 
 #### `DELETE /api/v1/transfers/{id}` → 204 (soft-deletes the transfer and both legs)
 

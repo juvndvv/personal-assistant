@@ -175,3 +175,146 @@ export interface Transaction {
   created_at: string;
   updated_at: string;
 }
+
+export const TRANSACTION_TYPES: readonly TransactionType[] = [
+  'expense',
+  'income',
+  'transfer',
+  'adjustment',
+];
+export const TRANSACTION_ORIGINS: readonly TransactionOrigin[] = [
+  'manual',
+  'voice',
+  'photo',
+  'recurring',
+];
+
+export type EntryType = Extract<TransactionType, 'expense' | 'income'>;
+export type TransferKind = 'transfer' | 'card_settlement';
+export type TagMode = 'any' | 'all';
+export type TransactionSort = '-date' | 'date' | '-amount' | 'amount';
+
+export interface Tag {
+  id: number;
+  name: string;
+  usage_count?: number;
+}
+
+export interface PageMeta {
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+  from: number | null;
+  to: number | null;
+}
+
+export interface Paginated<T, M extends PageMeta = PageMeta> {
+  data: T[];
+  meta: M;
+}
+
+export interface TransactionTotals {
+  income_cents: number;
+  expense_cents: number;
+}
+
+export interface TransactionPageMeta extends PageMeta {
+  totals: TransactionTotals;
+}
+
+export type TransactionPage = Paginated<Transaction, TransactionPageMeta>;
+
+export interface TransactionListQuery {
+  q?: string;
+  type?: readonly TransactionType[];
+  account_id?: readonly number[];
+  category_id?: readonly number[];
+  tag_id?: readonly number[];
+  tag_mode?: TagMode;
+  origin?: readonly TransactionOrigin[];
+  period?: PeriodLabel;
+  date_from?: IsoDateString;
+  date_to?: IsoDateString;
+  amount_min_cents?: number;
+  amount_max_cents?: number;
+  has_attachments?: boolean;
+  sort?: TransactionSort;
+  page?: number;
+  per_page?: number;
+}
+
+export interface TransactionInput {
+  type: EntryType;
+  amount_cents: number;
+  category_id: number;
+  date?: IsoDateString;
+  account_id?: number;
+  description?: string | null;
+  merchant?: string | null;
+  note?: string | null;
+  tags?: string[];
+  draft_id?: number | null;
+}
+
+export interface EntryPatch {
+  type?: EntryType;
+  amount_cents?: number;
+  date?: IsoDateString;
+  account_id?: number;
+  category_id?: number;
+  description?: string | null;
+  merchant?: string | null;
+  note?: string | null;
+  tags?: string[];
+}
+
+export interface AdjustmentPatch {
+  date?: IsoDateString;
+  target_balance_cents?: number;
+  note?: string | null;
+}
+
+export type TransactionPatch = EntryPatch | AdjustmentPatch;
+
+export interface Transfer {
+  id: number;
+  kind: TransferKind;
+  from_account: AccountSummary;
+  to_account: AccountSummary;
+  amount_cents: number;
+  date: IsoDateString;
+  note: string | null;
+  origin: TransactionOrigin;
+  out_transaction_id: number;
+  in_transaction_id: number;
+  created_at: string;
+}
+
+export interface TransferInput {
+  kind?: TransferKind;
+  from_account_id: number;
+  to_account_id: number;
+  amount_cents: number;
+  date?: IsoDateString;
+  note?: string | null;
+  draft_id?: number | null;
+}
+
+export type TransferPatch = Partial<Omit<TransferInput, 'draft_id'>>;
+
+export interface SettlementSuggestion {
+  card_account_id: number;
+  statement_start: IsoDateString | null;
+  statement_end: IsoDateString | null;
+  statement_balance_cents: number;
+  settled_since_cents: number;
+  suggested_cents: number;
+  from_account_id: number | null;
+}
+
+export interface QuickAddDefaults {
+  date: IsoDateString;
+  account_id: number | null;
+  frequent_category_ids: Record<EntryType, number[]>;
+}
