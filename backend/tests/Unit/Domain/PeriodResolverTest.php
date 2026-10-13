@@ -117,7 +117,19 @@ it('rejects start days outside 1..28', function (int $startDay): void {
 
 it('rejects malformed labels', function (string $label): void {
     (new PeriodResolver(1))->fromLabel($label);
-})->with(['2026-13', '2026-1', '26-10', '2026/10', ''])->throws(InvalidArgumentException::class);
+})->with(['2026-13', '2026-1', '26-10', '2026/10', '', '0000-01', '1899-12', '3000-01'])->throws(InvalidArgumentException::class);
+
+it('accepts labels at the year bounds and keeps their history resolvable', function (int $startDay): void {
+    $resolver = new PeriodResolver($startDay);
+
+    $periods = $resolver->lastN(24, $resolver->fromLabel('1900-01'));
+
+    expect(PeriodResolver::isValidLabel('1900-01'))->toBeTrue()
+        ->and(PeriodResolver::isValidLabel('2999-12'))->toBeTrue()
+        ->and(PeriodResolver::isValidLabel('0000-01'))->toBeFalse()
+        ->and($resolver->fromLabel('2999-12')->label)->toBe('2999-12')
+        ->and($periods[0]->start->year)->toBeGreaterThanOrEqual(1897);
+})->with([1, 25]);
 
 it('rejects a non-positive count', function (): void {
     (new PeriodResolver(1))->lastN(0);

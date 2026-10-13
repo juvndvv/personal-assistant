@@ -484,3 +484,67 @@ export interface RecurringForecast {
   posted_expense_cents: number;
   posted_income_cents: number;
 }
+
+export interface CategoryBreakdownChild {
+  category_id: number;
+  name: string;
+  amount_cents: number;
+  share_bp: number;
+}
+
+export interface CategoryBreakdownNode extends CategoryBreakdownChild {
+  own_cents: number;
+  children: CategoryBreakdownChild[];
+}
+
+export interface PeriodSummary {
+  period: Period;
+  income_cents: number;
+  expense_cents: number;
+  net_cents: number;
+  savings_rate_bp: number | null;
+  by_category: Record<CategoryKind, CategoryBreakdownNode[]>;
+}
+
+export interface TrendPoint {
+  period: Period;
+  income_cents: number;
+  expense_cents: number;
+  savings_rate_bp: number | null;
+  category_cents?: number;
+}
+
+export interface TrendQuery {
+  periods?: number;
+  until?: PeriodLabel;
+  category_id?: number;
+}
+
+export interface NetWorthAccount {
+  id: number;
+  name: string;
+  type: AccountType;
+  archived: boolean;
+  balance_cents: number;
+  last_updated_on: IsoDateString | null;
+  stale: boolean;
+}
+
+export interface NetWorth {
+  date: IsoDateString;
+  total_cents: number;
+  assets_cents: number;
+  liabilities_cents: number;
+  accounts: NetWorthAccount[];
+}
+
+export interface CaptureMetrics {
+  period: Period;
+  captures_confirmed: number;
+  median_seconds_to_confirm: number | null;
+  p90_seconds_to_confirm: number | null;
+  unedited_share_bp: number | null;
+  active_days: number;
+  elapsed_days: number;
+  active_days_per_week: number | null;
+}

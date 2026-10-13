@@ -50,4 +50,8 @@ it('requires authentication for every ledger endpoint', function (string $method
     ['POST', '/api/v1/transactions/1/attachments'],
     ['GET', '/api/v1/attachments/x'],
     ['DELETE', '/api/v1/attachments/x'],
+    ['GET', '/api/v1/reports/summary'],
+    ['GET', '/api/v1/reports/trend'],
+    ['GET', '/api/v1/reports/net-worth'],
+    ['GET', '/api/v1/reports/capture-metrics'],
 ]);

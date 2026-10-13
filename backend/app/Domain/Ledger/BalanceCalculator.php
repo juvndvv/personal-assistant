@@ -17,18 +17,18 @@ final class BalanceCalculator
      */
     public function summaries(?CarbonImmutable $date = null, ?array $accountIds = null): array
     {
+        $asOf = ($date ?? CarbonImmutable::today())->toDateString();
+
         $query = DB::table('accounts')
-            ->leftJoin('transactions', function ($join): void {
+            ->leftJoin('transactions', function ($join) use ($asOf): void {
                 $join->on('transactions.account_id', '=', 'accounts.id')
-                    ->whereNull('transactions.deleted_at');
+                    ->whereNull('transactions.deleted_at')
+                    ->where('transactions.date', '<=', $asOf);
             })
             ->whereNull('accounts.deleted_at')
             ->groupBy('accounts.id', 'accounts.opening_balance_cents')
             ->select('accounts.id')
-            ->selectRaw(
-                'accounts.opening_balance_cents + COALESCE(SUM(transactions.amount_cents) FILTER (WHERE transactions.date <= ?), 0) AS balance_cents',
-                [($date ?? CarbonImmutable::today())->toDateString()],
-            )
+            ->selectRaw('accounts.opening_balance_cents + COALESCE(SUM(transactions.amount_cents), 0) AS balance_cents')
             ->selectRaw('MAX(transactions.date) AS last_movement_date')
             ->selectRaw(
                 'MAX(transactions.date) FILTER (WHERE transactions.type = ?) AS last_adjustment_date',

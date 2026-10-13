@@ -695,7 +695,7 @@ All reports read only reportable rows (confirmed live expense/income). Periods c
 } }
 ```
 
-`savings_rate_bp` = round((income − expense) × 10000 / income) using integer math, null when income is 0; it can be negative. `share_bp` is the share of the kind total. `own_cents` is spend booked directly on the parent. Categories with zero amount are omitted.
+`savings_rate_bp` = round((income − expense) × 10000 / income) using integer math, null when income is 0; it can be negative. `share_bp` is the share of the kind total. `own_cents` is spend booked directly on the parent. Categories with zero amount are omitted. Top-level nodes always carry `own_cents` and `children` (possibly `[]`); child nodes carry only `category_id`, `name`, `amount_cents`, `share_bp`. Nodes are sorted by `amount_cents` descending, then name. Archived categories still appear when they have movements in the period. `period` defaults to the current period; an invalid label is 422 `errors.period`.
 
 #### `GET /api/v1/reports/trend?periods=12&until=2026-10&category_id=10`
 
@@ -705,7 +705,7 @@ All reports read only reportable rows (confirmed live expense/income). Periods c
 { "data": [ { "period": Period, "income_cents": 210000, "expense_cents": 157500, "savings_rate_bp": 2500, "category_cents": 42000 } ] }
 ```
 
-`category_cents` is present only with `category_id` (parent includes children).
+`category_cents` is present only with `category_id` (parent includes children; magnitude, works for income categories too). `until` defaults to the current period. Errors: 422 on `periods` (not 1..24), `until` (not `YYYY-MM`) and `category_id` (unknown).
 
 #### `GET /api/v1/reports/net-worth?date=2026-10-13` (RF-32)
 
@@ -718,6 +718,8 @@ All reports read only reportable rows (confirmed live expense/income). Periods c
   "accounts": [ { "id": 3, "name": "BBVA", "type": "checking", "archived": false, "balance_cents": 234567, "last_updated_on": "2026-10-12", "stale": false } ]
 } }
 ```
+
+`date` defaults to today (422 when not a valid `YYYY-MM-DD`). Balances are at `date`; accounts include archived ones and exclude deleted ones, in the same order as `GET /accounts`. `assets_cents` is the sum of positive balances and `liabilities_cents` the sum of negative balances (so a card in debt subtracts), `total_cents = assets_cents + liabilities_cents`. `last_updated_on` and `stale` follow `DATA_MODEL.md` §4, with staleness measured against today.
 
 #### `GET /api/v1/reports/capture-metrics?period=2026-10` (PRD metrics)
 
@@ -734,7 +736,7 @@ All reports read only reportable rows (confirmed live expense/income). Periods c
 } }
 ```
 
-Time to confirm = `drafts.confirmed_at − captures.client_started_at` (fallback `captures.created_at`). Unedited = confirmed capture drafts with empty `corrected_fields`. Active days = distinct Madrid dates of `created_at` of transactions with origin `manual|voice|photo` within the period's elapsed days. Seconds are the only non-integer outputs (display values, not money).
+Time to confirm = `drafts.confirmed_at − captures.client_started_at` (fallback `captures.created_at`, floored at 0) over voice/photo drafts confirmed (Madrid date of `confirmed_at`) within the period; `captures_confirmed` counts them. Unedited = confirmed capture drafts with empty or null `corrected_fields`. Active days = distinct Madrid dates of `created_at` of reportable (live `expense`/`income`) transactions with origin `manual|voice|photo` within the period's elapsed days (period start through today, or the whole period once it has ended; 0 for a future period). `active_days_per_week = active_days × 7 / elapsed_days`. Seconds and `active_days_per_week` are the only non-integer outputs (display values rounded to one decimal; JSON may serialize `8.0` as `8`). With no confirmed captures the two seconds fields and `unedited_share_bp` are null; with `elapsed_days = 0`, `active_days_per_week` is null.
 
 #### `GET /api/v1/reports/budget-vs-actual?period=2026-10` (RF-33, M6)
 

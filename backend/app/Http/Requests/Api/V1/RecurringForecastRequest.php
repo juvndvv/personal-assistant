@@ -6,17 +6,18 @@ namespace App\Http\Requests\Api\V1;
 
 use App\Domain\Period\Period;
 use App\Domain\Period\PeriodResolver;
+use App\Rules\PeriodLabel;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class RecurringForecastRequest extends FormRequest
 {
     /**
-     * @return array<string, list<string>>
+     * @return array<string, list<mixed>>
      */
     public function rules(): array
     {
         return [
-            'period' => ['sometimes', 'string', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
+            'period' => ['sometimes', 'string', new PeriodLabel],
         ];
     }
 

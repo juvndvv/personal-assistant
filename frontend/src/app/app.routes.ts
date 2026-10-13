@@ -56,6 +56,12 @@ export const routes: Routes = [
         loadComponent: () => import('./features/reports/reports.page').then((m) => m.ReportsPage),
       },
       {
+        path: 'informes/patrimonio',
+        title: 'Patrimonio · Finanzas',
+        loadComponent: () =>
+          import('./features/reports/net-worth.page').then((m) => m.NetWorthPage),
+      },
+      {
         path: 'mas',
         title: 'Más · Finanzas',
         loadComponent: () => import('./features/more/more.page').then((m) => m.MorePage),

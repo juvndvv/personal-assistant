@@ -83,6 +83,36 @@ function providerModelLiteralLines(string $code): array
     return $lines;
 }
 
+/**
+ * @return list<int>
+ */
+function unscopedLedgerReadLines(string $code): array
+{
+    $tokens = PhpToken::tokenize($code);
+    $lines = [];
+
+    foreach ($tokens as $index => $token) {
+        $isTableLiteral = $token->id === T_CONSTANT_ENCAPSED_STRING
+            && preg_match('/^([\'"])transactions\1$|\b(from|join)\s+transactions\b/i', $token->text) === 1;
+        $isHeredocTable = $token->id === T_ENCAPSED_AND_WHITESPACE
+            && preg_match('/\b(from|join)\s+transactions\b/i', $token->text) === 1;
+
+        $isUnscopedModelCall = false;
+
+        if (in_array($token->id, [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)
+            && preg_match('/(^|\\\\)Transaction$/', $token->text) === 1
+            && ($tokens[$index + 1]->id ?? null) === T_DOUBLE_COLON) {
+            $isUnscopedModelCall = ($tokens[$index + 2]->text ?? '') !== 'reportable';
+        }
+
+        if ($isTableLiteral || $isHeredocTable || $isUnscopedModelCall) {
+            $lines[] = $token->line;
+        }
+    }
+
+    return $lines;
+}
+
 arch('every file declares strict types')
     ->expect('App')
     ->toUseStrictTypes();
@@ -170,3 +200,41 @@ arch('agents never pin a provider or model with attributes')
 it('detects provider model literals', function (): void {
     expect(providerModelLiteralLines("<?php\n\$model = 'gpt-6-luna';\n\$stt = \"whisper-1\";\n// gpt-4 in a comment\n"))->toBe([2, 3]);
 });
+
+it('reads the ledger in reports only through the reportable scope', function (): void {
+    $violations = [];
+
+    foreach (phpFilesIn('app/Reports') as $file) {
+        foreach (unscopedLedgerReadLines((string) file_get_contents($file)) as $line) {
+            $violations[] = $file.':'.$line;
+        }
+    }
+
+    expect(phpFilesIn('app/Reports'))->not->toBe([])
+        ->and($violations)->toBe([]);
+});
+
+it('detects ledger reads that bypass the reportable scope', function (): void {
+    $code = <<<'PHP'
+        <?php
+        Transaction::reportable()->sum('amount_cents');
+        Transaction::query()->sum('amount_cents');
+        DB::table('transactions')->count();
+        DB::select("SELECT 1 FROM transactions");
+        DB::select("SELECT 1 FROM accounts JOIN transactions ON true");
+        $sql = 'transactions.amount_cents';
+        \App\Models\Transaction::withTrashed();
+        PHP;
+
+    expect(unscopedLedgerReadLines($code))->toBe([3, 4, 5, 6, 8]);
+});
+
+arch('net worth reads balances through the balance calculator, never the ledger')
+    ->expect('App\Reports\NetWorthReport')
+    ->toUse('App\Domain\Ledger\BalanceCalculator')
+    ->not->toUse('App\Models\Transaction');
+
+arch('reports are read-only services outside the HTTP layer')
+    ->expect('App\Reports')
+    ->not->toUse('App\Http')
+    ->not->toUse('App\Actions');

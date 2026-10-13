@@ -1,8 +1,8 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
-import { catchError, of, switchMap } from 'rxjs';
-import { ForecastItem, RecurringForecast } from '../../core/api/models';
+import { catchError, combineLatest, of, switchMap } from 'rxjs';
+import { ForecastItem, PeriodLabel, RecurringForecast } from '../../core/api/models';
 import { RecurringApi } from '../../core/api/recurring.api';
 import { formatDate } from '../../core/date/iso-date';
 import { EurPipe } from '../../core/money/eur.pipe';
@@ -101,6 +101,8 @@ export class ForecastCard {
   private readonly api = inject(RecurringApi);
   private readonly sheets = inject(MovementSheets);
 
+  readonly period = input<PeriodLabel | undefined>(undefined);
+
   protected readonly statusLabel = FORECAST_STATUS_LABELS;
   protected readonly forecast = signal<RecurringForecast | null>(null);
   protected readonly pendingItems = computed(() =>
@@ -114,9 +116,13 @@ export class ForecastCard {
   });
 
   constructor() {
-    toObservable(this.sheets.changes)
+    combineLatest([toObservable(this.period), toObservable(this.sheets.changes)])
       .pipe(
-        switchMap(() => this.api.forecast().pipe(catchError(() => of(null)))),
+        switchMap(([period]) =>
+          (period === undefined ? this.api.forecast() : this.api.forecast(period)).pipe(
+            catchError(() => of(null)),
+          ),
+        ),
         takeUntilDestroyed(),
       )
       .subscribe((forecast) => this.forecast.set(forecast));

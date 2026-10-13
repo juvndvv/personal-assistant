@@ -12,6 +12,7 @@ RUNTIME_IMAGE ?= personal-finance:local
 EMAIL ?=
 NAME ?=
 DATE ?=
+PERF_DB ?= finance_perf
 
 COMPOSE := docker compose
 COMPOSE_PROD := docker compose -f compose.yaml -f compose.prod.yaml
@@ -19,7 +20,7 @@ BACKEND_TEST_ENV := DB_HOST=127.0.0.1 DB_PORT=$(DB_HOST_PORT) DB_USERNAME=$(DB_U
 
 .PHONY: help env install up down logs ps config lint lint-pins lint-backend lint-frontend \
 	test test-backend test-frontend build build-frontend build-image smoke e2e user trust-ca verify-ledger \
-	recurring schedule
+	recurring schedule perf
 
 help:
 	@grep -hE '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -67,6 +68,9 @@ test: test-backend test-frontend ## Run backend and frontend tests
 
 test-backend: ## Pest on PostgreSQL finance_test (needs the db service)
 	cd backend && $(BACKEND_TEST_ENV) php artisan test --parallel
+
+perf: ## Seed 50k movements on a scratch DB, run Pest --group=perf, append results to QA_LOG.md
+	$(BACKEND_TEST_ENV) PERF_DB=$(PERF_DB) scripts/perf.sh
 
 test-frontend: ## Vitest in run mode
 	cd frontend && npm test

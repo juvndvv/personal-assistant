@@ -11,6 +11,7 @@ use App\Domain\Transactions\TransactionFilters;
 use App\Domain\Transactions\TransactionSort;
 use App\Enums\TransactionOrigin;
 use App\Enums\TransactionType;
+use App\Rules\PeriodLabel;
 use BackedEnum;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -41,7 +42,7 @@ final class ListTransactionsRequest extends FormRequest
             'tag_mode' => ['sometimes', Rule::enum(TagMatch::class)],
             'origin' => ['sometimes', 'array'],
             'origin.*' => [Rule::enum(TransactionOrigin::class)],
-            'period' => ['sometimes', 'string', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
+            'period' => ['sometimes', 'string', new PeriodLabel],
             'date_from' => ['sometimes', 'date_format:Y-m-d'],
             'date_to' => ['sometimes', 'date_format:Y-m-d', 'after_or_equal:date_from'],
             'amount_min_cents' => $cents,

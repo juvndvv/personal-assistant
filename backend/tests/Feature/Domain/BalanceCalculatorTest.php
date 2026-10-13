@@ -89,6 +89,23 @@ it('reports the last movement and adjustment dates', function (): void {
         ->and($adjustments[$empty->id])->toBeNull();
 });
 
+it('bounds the last movement and adjustment dates by the valuation date', function (): void {
+    $account = account(AccountType::SavingsInvestment);
+    Transaction::factory()->on($account, day('2026-03-01'))->adjustment(500, 500)->create();
+    Transaction::factory()->on($account, day('2026-04-01'))->expense(100)->create();
+    Transaction::factory()->on($account, day('2026-09-01'))->adjustment(700, 1_100)->create();
+    Transaction::factory()->on($account, day('2026-10-20'))->expense(100)->create();
+
+    $current = $this->calculator->summary($account->id);
+    $past = $this->calculator->summary($account->id, day('2026-05-31'));
+
+    expect($current->lastMovementDate?->toDateString())->toBe('2026-09-01')
+        ->and($current->lastAdjustmentDate?->toDateString())->toBe('2026-09-01')
+        ->and($past->lastMovementDate?->toDateString())->toBe('2026-04-01')
+        ->and($past->lastAdjustmentDate?->toDateString())->toBe('2026-03-01')
+        ->and($past->balanceCents)->toBe(400);
+});
+
 it('derives last_updated_on from adjustments for manually valued accounts', function (AccountType $type, ?string $adjustment, ?string $movement, string $expected): void {
     $account = account($type, openingDate: '2026-01-15');
 

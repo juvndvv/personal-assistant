@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\PeriodsController;
 use App\Http\Controllers\Api\V1\QuickAddController;
 use App\Http\Controllers\Api\V1\RecurringForecastController;
 use App\Http\Controllers\Api\V1\RecurringTemplatesController;
+use App\Http\Controllers\Api\V1\ReportsController;
 use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\TagsController;
 use App\Http\Controllers\Api\V1\TransactionsController;
@@ -83,6 +84,11 @@ Route::middleware('auth:sanctum')->group(function (): void {
         ->whereNumber('recurring_template')
         ->name('recurring-templates.resume');
     Route::get('recurring/forecast', [RecurringForecastController::class, 'show'])->name('recurring.forecast');
+
+    Route::get('reports/summary', [ReportsController::class, 'summary'])->name('reports.summary');
+    Route::get('reports/trend', [ReportsController::class, 'trend'])->name('reports.trend');
+    Route::get('reports/net-worth', [ReportsController::class, 'netWorth'])->name('reports.net-worth');
+    Route::get('reports/capture-metrics', [ReportsController::class, 'captureMetrics'])->name('reports.capture-metrics');
 
     Route::get('attachments/{attachment}', [AttachmentsController::class, 'show'])->name('attachments.show');
     Route::delete('attachments/{attachment}', [AttachmentsController::class, 'destroy'])->name('attachments.destroy');

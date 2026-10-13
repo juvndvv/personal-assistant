@@ -15,6 +15,10 @@ final readonly class PeriodResolver
 
     private const int LAST_START_DAY_LABELLED_BY_START_MONTH = 15;
 
+    public const int MIN_LABEL_YEAR = 1900;
+
+    public const int MAX_LABEL_YEAR = 2999;
+
     private const string LABEL_PATTERN = '/^(\d{4})-(0[1-9]|1[0-2])$/';
 
     public function __construct(public int $monthStartDay)
@@ -26,7 +30,7 @@ final readonly class PeriodResolver
 
     public static function isValidLabel(string $label): bool
     {
-        return preg_match(self::LABEL_PATTERN, $label) === 1;
+        return self::labelYearAndMonth($label) !== null;
     }
 
     public function forDate(CarbonImmutable $date): Period
@@ -42,11 +46,15 @@ final readonly class PeriodResolver
 
     public function fromLabel(string $label): Period
     {
-        if (preg_match(self::LABEL_PATTERN, $label, $matches) !== 1) {
-            throw new InvalidArgumentException("Invalid period label \"{$label}\"; expected YYYY-MM.");
-        }
+        [$year, $month] = self::labelYearAndMonth($label)
+            ?? throw new InvalidArgumentException(sprintf(
+                'Invalid period label "%s"; expected YYYY-MM with a year between %d and %d.',
+                $label,
+                self::MIN_LABEL_YEAR,
+                self::MAX_LABEL_YEAR,
+            ));
 
-        $labelMonth = CarbonImmutable::create((int) $matches[1], (int) $matches[2], 1)?->startOfDay()
+        $labelMonth = CarbonImmutable::create($year, $month, 1)?->startOfDay()
             ?? throw new InvalidArgumentException("Invalid period label \"{$label}\".");
 
         $monthOfStart = $this->isLabelledByStartMonth() ? $labelMonth : $labelMonth->subMonthNoOverflow();
@@ -101,5 +109,23 @@ final readonly class PeriodResolver
     private function isLabelledByStartMonth(): bool
     {
         return $this->monthStartDay <= self::LAST_START_DAY_LABELLED_BY_START_MONTH;
+    }
+
+    /**
+     * @return array{int, int}|null
+     */
+    private static function labelYearAndMonth(string $label): ?array
+    {
+        if (preg_match(self::LABEL_PATTERN, $label, $matches) !== 1) {
+            return null;
+        }
+
+        $year = (int) $matches[1];
+
+        if ($year < self::MIN_LABEL_YEAR || $year > self::MAX_LABEL_YEAR) {
+            return null;
+        }
+
+        return [$year, (int) $matches[2]];
     }
 }
