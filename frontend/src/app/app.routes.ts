@@ -97,6 +97,11 @@ export const routes: Routes = [
           import('./features/recurring/recurring-editor.page').then((m) => m.RecurringEditorPage),
       },
       {
+        path: 'mas/presupuestos',
+        title: 'Presupuestos · Finanzas',
+        loadComponent: () => import('./features/budgets/budgets.page').then((m) => m.BudgetsPage),
+      },
+      {
         path: 'mas/ajustes',
         title: 'Ajustes · Finanzas',
         loadComponent: () =>

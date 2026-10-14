@@ -9,6 +9,7 @@ import { CategoriesApi } from '../../core/api/categories.api';
 import { PeriodsApi } from '../../core/api/periods.api';
 import { ReportsApi } from '../../core/api/reports.api';
 import { formatCents } from '../../core/money/format-cents';
+import { aBudgetVsActual } from '../budgets/testing/budget-fixtures';
 import { aCategory } from '../categories/testing/category-fixtures';
 import { ReportsPage } from './reports.page';
 import { aCaptureMetrics, aPeriod, aSummary, aTrend } from './testing/report-fixtures';
@@ -23,6 +24,9 @@ async function setup(url = '/informes') {
     summary: vi.fn((period?: string) => of(aSummary({ period: aPeriod(period ?? '2026-10') }))),
     trend: vi.fn(() => of(aTrend())),
     captureMetrics: vi.fn(() => of(aCaptureMetrics())),
+    budgetVsActual: vi.fn((period?: string) =>
+      of(aBudgetVsActual({ period: aPeriod(period ?? '2026-10') })),
+    ),
     netWorth: vi.fn(),
   };
   TestBed.configureTestingModule({
@@ -80,12 +84,21 @@ describe('ReportsPage', () => {
     await vi.waitFor(() => expect(reports.summary).toHaveBeenLastCalledWith('2026-09'));
     expect(reports.trend).toHaveBeenLastCalledWith({ periods: 12, until: '2026-09' });
     expect(reports.captureMetrics).toHaveBeenLastCalledWith('2026-09');
+    expect(reports.budgetVsActual).toHaveBeenLastCalledWith('2026-09');
     harness.detectChanges();
     expect(screen.getByTestId('period-name')).toHaveTextContent('septiembre de 2026');
     expect(screen.getByRole('button', { name: 'Periodo siguiente' })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: 'Ir al actual' }));
     await vi.waitFor(() => expect(router.url).toBe('/informes'));
+  });
+
+  it('shows budget vs actual for the selected period', async () => {
+    const { reports } = await setup('/informes?period=2026-09');
+
+    const section = await screen.findByRole('region', { name: 'Presupuesto vs real' });
+    expect(reports.budgetVsActual).toHaveBeenCalledWith('2026-09');
+    expect(within(section).getAllByTestId('budget-row')).toHaveLength(4);
   });
 
   it('opens a period from the trend chart', async () => {

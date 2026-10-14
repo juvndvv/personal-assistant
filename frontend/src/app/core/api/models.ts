@@ -548,3 +548,39 @@ export interface CaptureMetrics {
   elapsed_days: number;
   active_days_per_week: number | null;
 }
+
+export interface Budget {
+  category: CategorySummary;
+  amount_cents: number | null;
+  effective_from: PeriodLabel | null;
+}
+
+export interface BudgetInput {
+  amount_cents: number;
+  effective_from?: PeriodLabel;
+}
+
+export interface BudgetHistoryEntry {
+  effective_from: PeriodLabel;
+  amount_cents: number;
+}
+
+export const BUDGET_STATUSES = ['ok', 'warning', 'over'] as const;
+export type BudgetStatus = (typeof BUDGET_STATUSES)[number];
+
+export interface BudgetVsActualItem {
+  category: CategorySummary;
+  budget_cents: number;
+  actual_cents: number;
+  remaining_cents: number;
+  used_bp: number;
+  status: BudgetStatus;
+}
+
+export interface BudgetVsActual {
+  period: Period;
+  items: BudgetVsActualItem[];
+  budgeted_cents: number;
+  actual_budgeted_cents: number;
+  unbudgeted_actual_cents: number;
+}

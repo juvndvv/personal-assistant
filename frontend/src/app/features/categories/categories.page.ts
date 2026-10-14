@@ -32,7 +32,7 @@ import { MoveDirection, nextSortOrder, siblingsOf, sortOrderChangesForMove } fro
 
 const CONFLICT_MESSAGES: Record<string, string> = {
   category_in_use:
-    'Esta categoría se usa en movimientos, plantillas, presupuestos o borradores. Archívala para ocultarla sin perder el historial.',
+    'Esta categoría se usa en movimientos, plantillas o borradores. Archívala para ocultarla sin perder el historial.',
   category_has_children: 'Esta categoría tiene subcategorías. Elimínalas o archívala.',
 };
 

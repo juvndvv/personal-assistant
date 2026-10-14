@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\Api\V1\AccountsController;
 use App\Http\Controllers\Api\V1\AttachmentsController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BudgetsController;
 use App\Http\Controllers\Api\V1\CapturesController;
 use App\Http\Controllers\Api\V1\CategoriesController;
 use App\Http\Controllers\Api\V1\DraftsController;
@@ -89,6 +90,12 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('reports/trend', [ReportsController::class, 'trend'])->name('reports.trend');
     Route::get('reports/net-worth', [ReportsController::class, 'netWorth'])->name('reports.net-worth');
     Route::get('reports/capture-metrics', [ReportsController::class, 'captureMetrics'])->name('reports.capture-metrics');
+    Route::get('reports/budget-vs-actual', [ReportsController::class, 'budgetVsActual'])->name('reports.budget-vs-actual');
+
+    Route::get('budgets', [BudgetsController::class, 'index'])->name('budgets.index');
+    Route::put('budgets/{category}', [BudgetsController::class, 'update'])->whereNumber('category')->name('budgets.update');
+    Route::delete('budgets/{category}', [BudgetsController::class, 'destroy'])->whereNumber('category')->name('budgets.destroy');
+    Route::get('budgets/{category}/history', [BudgetsController::class, 'history'])->whereNumber('category')->name('budgets.history');
 
     Route::get('attachments/{attachment}', [AttachmentsController::class, 'show'])->name('attachments.show');
     Route::delete('attachments/{attachment}', [AttachmentsController::class, 'destroy'])->name('attachments.destroy');

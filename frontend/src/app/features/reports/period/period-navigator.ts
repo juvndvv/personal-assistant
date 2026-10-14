@@ -16,6 +16,7 @@ export class PeriodNavigator {
 
   private readonly currentPeriod = signal<Period | null>(null);
   private readonly loadFailed = signal(false);
+  private readonly periodsAhead = signal(0);
   private readonly requested = toSignal(
     this.route.queryParamMap.pipe(
       map((params) => {
@@ -35,7 +36,11 @@ export class PeriodNavigator {
   readonly canGoNext = computed(() => {
     const label = this.label();
     const current = this.currentPeriod();
-    return label !== null && current !== null && label < current.label;
+    return (
+      label !== null &&
+      current !== null &&
+      label < shiftPeriodLabel(current.label, this.periodsAhead())
+    );
   });
 
   constructor() {
@@ -43,6 +48,10 @@ export class PeriodNavigator {
       next: (period) => this.currentPeriod.set(period),
       error: () => this.loadFailed.set(true),
     });
+  }
+
+  allowPeriodsAhead(count: number): void {
+    this.periodsAhead.set(Math.max(0, count));
   }
 
   previous(): void {

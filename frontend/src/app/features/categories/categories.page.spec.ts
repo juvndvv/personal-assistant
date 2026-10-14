@@ -127,4 +127,23 @@ describe('CategoriesPage', () => {
 
     expect(await within(dialog).findByText(message)).toBeInTheDocument();
   });
+
+  it('names only the real deletion blockers on a category_in_use conflict', async () => {
+    const { api, user } = await setup();
+    api.delete.mockReturnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({ status: 409, error: { message: 'x', code: 'category_in_use' } }),
+      ),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar Alimentación' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Eliminar categoría' });
+    await user.click(within(dialog).getByRole('button', { name: 'Eliminar' }));
+
+    const message = await within(dialog).findByText(
+      'Esta categoría se usa en movimientos, plantillas o borradores. Archívala para ocultarla sin perder el historial.',
+    );
+    expect(message).not.toHaveTextContent(/presupuesto/i);
+  });
 });

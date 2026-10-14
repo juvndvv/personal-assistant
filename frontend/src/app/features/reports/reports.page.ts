@@ -6,6 +6,7 @@ import { CategoryKind, PeriodLabel, PeriodSummary } from '../../core/api/models'
 import { ReportsApi } from '../../core/api/reports.api';
 import { formatCents } from '../../core/money/format-cents';
 import { StatTile, formatBasisPoints } from '../../shared/charts';
+import { BudgetVsActualSection } from '../budgets/budget-vs-actual-section';
 import { PageHeader } from '../../shared/layout/page-header';
 import { CaptureQualityPanel } from './capture-quality-panel';
 import { CategoryBreakdown } from './category-breakdown';
@@ -25,6 +26,7 @@ import { TrendSection } from './trend-section';
 @Component({
   selector: 'app-reports-page',
   imports: [
+    BudgetVsActualSection,
     CaptureQualityPanel,
     CategoryBreakdown,
     PageHeader,
@@ -94,6 +96,10 @@ import { TrendSection } from './trend-section';
         />
       </div>
     }
+
+    <div class="mt-6">
+      <app-budget-vs-actual-section [period]="navigator.label()" />
+    </div>
 
     <app-trend-section
       class="mt-6"

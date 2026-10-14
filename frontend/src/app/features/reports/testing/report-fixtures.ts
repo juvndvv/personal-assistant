@@ -159,5 +159,13 @@ export function quietReportsApi() {
     trend: () => of(aTrend()),
     netWorth: () => of(aNetWorth()),
     captureMetrics: () => of(aCaptureMetrics()),
+    budgetVsActual: (period?: string) =>
+      of({
+        period: aPeriod(period ?? '2026-10'),
+        items: [],
+        budgeted_cents: 0,
+        actual_budgeted_cents: 0,
+        unbudgeted_actual_cents: 0,
+      }),
   };
 }

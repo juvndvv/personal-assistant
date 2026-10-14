@@ -12,6 +12,7 @@ import { RecurringApi } from '../../core/api/recurring.api';
 import { ReportsApi } from '../../core/api/reports.api';
 import { TransactionsApi } from '../../core/api/transactions.api';
 import { formatCents } from '../../core/money/format-cents';
+import { aBudgetVsActual } from '../budgets/testing/budget-fixtures';
 import { quietAttachmentsApi, quietDraftsApi } from '../drafts/testing/draft-fixtures';
 import { aForecast, quietRecurringApi } from '../recurring/testing/recurring-fixtures';
 import { aNetWorth, aNetWorthAccount, aPeriod, aSummary } from '../reports/testing/report-fixtures';
@@ -32,6 +33,9 @@ async function setup(options: SetupOptions = {}) {
   const reports = {
     summary: vi.fn((period?: string) => of(aSummary({ period: aPeriod(period ?? '2026-10') }))),
     netWorth: vi.fn(() => of(options.netWorth ?? aNetWorth())),
+    budgetVsActual: vi.fn((period?: string) =>
+      of(aBudgetVsActual({ period: aPeriod(period ?? '2026-10') })),
+    ),
   };
   const transactions = {
     list: vi.fn(() => of(aPage([aTransaction({ description: 'Pan' }), aTransferLeg()]))),
@@ -205,6 +209,14 @@ describe('HomePage', () => {
     const card = await screen.findByRole('region', { name: 'Fijos pendientes este periodo' });
     expect(card).toHaveTextContent('Luz');
     expect(recurringApi.forecast).toHaveBeenCalledWith('2026-09');
+  });
+
+  it('shows the three most used budgets of the selected period', async () => {
+    const { reports } = await setup({ url: '/?period=2026-09' });
+
+    const card = await screen.findByRole('region', { name: 'Presupuestos' });
+    expect(reports.budgetVsActual).toHaveBeenCalledWith('2026-09');
+    expect(within(card).getAllByTestId('budget-row')).toHaveLength(3);
   });
 
   it('reports a failure when the net worth cannot be loaded', async () => {

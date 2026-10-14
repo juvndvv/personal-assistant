@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideChevronRight,
+  lucideChartPie,
   lucideFolderTree,
   lucideInbox,
   lucideRepeat,
@@ -35,6 +36,12 @@ const MORE_LINKS: readonly MoreLink[] = [
     icon: 'lucideRepeat',
   },
   {
+    path: '/mas/presupuestos',
+    label: 'Presupuestos',
+    description: 'Límite mensual por categoría de gasto.',
+    icon: 'lucideChartPie',
+  },
+  {
     path: '/cuentas',
     label: 'Cuentas',
     description: 'Saldos, tarjetas y ajustes de saldo.',
@@ -65,6 +72,7 @@ const MORE_LINKS: readonly MoreLink[] = [
   imports: [NgIcon, PageHeader, RouterLink, UiButton],
   providers: [
     provideIcons({
+      lucideChartPie,
       lucideChevronRight,
       lucideFolderTree,
       lucideInbox,

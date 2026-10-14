@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { API_BASE } from './api-paths';
 import {
+  BudgetVsActual,
   CaptureMetrics,
   DataEnvelope,
   IsoDateString,
@@ -51,6 +52,14 @@ export class ReportsApi {
   captureMetrics(period?: PeriodLabel): Observable<CaptureMetrics> {
     return this.http
       .get<DataEnvelope<CaptureMetrics>>(`${REPORTS}/capture-metrics`, {
+        params: periodParams(period),
+      })
+      .pipe(map((response) => response.data));
+  }
+
+  budgetVsActual(period?: PeriodLabel): Observable<BudgetVsActual> {
+    return this.http
+      .get<DataEnvelope<BudgetVsActual>>(`${REPORTS}/budget-vs-actual`, {
         params: periodParams(period),
       })
       .pipe(map((response) => response.data));

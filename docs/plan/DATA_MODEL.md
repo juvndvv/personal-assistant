@@ -319,7 +319,7 @@ The idempotency key required by the TRD (`UNIQUE (template, period)`).
 | `effective_from` | `char(7)` | NOT NULL, `CHECK (effective_from ~ '^\d{4}-(0[1-9]|1[0-2])$')` (period label) |
 | `created_at`, `updated_at` | `timestamptz` | |
 
-Constraints: `FOREIGN KEY (category_id, category_kind) REFERENCES categories (id, kind) ON DELETE CASCADE` (expense only); `UNIQUE (category_id, effective_from)`; trigger `budgets_top_level_only` (the category has `parent_id IS NULL`).
+Constraints: `FOREIGN KEY (category_id, category_kind) REFERENCES categories (id, kind) ON DELETE CASCADE` (expense only); `UNIQUE (category_id, effective_from)`; trigger `budgets_top_level_only` (the category has `parent_id IS NULL`). Trigger `categories_budgeted_top_level_only` (BEFORE UPDATE OF `parent_id` on `categories`) rejects giving a parent to a category that has budget rows, so a budget can never end up on a subcategory. Constraint names: `budgets_amount_not_negative`, `budgets_effective_from_format`, `budgets_category_kind_fk`, `budgets_category_effective_from_unique`. The effective-budget lookup is `App\Domain\Budgets\EffectiveBudgets` (read-side, so `App\Reports` can use it without depending on `App\Actions`).
 
 The effective budget of category C in period P is the row with the greatest `effective_from <= P.label`; `amount_cents = 0` means none.
 

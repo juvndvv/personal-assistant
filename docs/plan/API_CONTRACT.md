@@ -55,7 +55,7 @@ Query: `page` (default 1), `per_page` (default 50, max 100). Non-paginated lists
 |---|---|
 | `account_has_movements` | Account cannot be deleted because it has live movements (archive it instead). |
 | `opening_date_after_movements` | `opening_date` would move after existing movements. |
-| `category_in_use` | Category is referenced by movements, templates, budgets or drafts. |
+| `category_in_use` | Category is referenced by movements, templates or pending drafts. Budgets do not block deletion; they are deleted with the category (`ON DELETE CASCADE`). |
 | `category_has_children` | Category has subcategories. |
 | `transfer_leg_immutable` | A transfer leg was edited or deleted through `/transactions`; use `/transfers/{id}`. |
 | `draft_not_pending` | The draft is already confirmed or discarded. |
@@ -750,20 +750,26 @@ Time to confirm = `drafts.confirmed_at − captures.client_started_at` (fallback
 } }
 ```
 
-`actual_cents` includes subcategories. `status`: `ok` (< 80 %), `warning` (80–100 %), `over` (> 100 %).
+`actual_cents` includes subcategories (archived ones too). `status`: `ok` (< 80 %), `warning` (80–100 %), `over` (> 100 %); thresholds compare `actual_cents` and `budget_cents` exactly, so `used_bp` (rounded) may read `10000` while `status` is `over`. `items` holds every non-archived top-level expense category with an effective budget > 0 in the period (including those with no spend), in category order (`sort_order`, name). `budgeted_cents` sums the items' budgets, `actual_budgeted_cents` their actuals, and `unbudgeted_actual_cents` is the period's total expense minus `actual_budgeted_cents`. `period` defaults to current; invalid label is 422 `errors.period`.
 
 ### 3.13 Budgets (M6, RF-40)
 
 #### `GET /api/v1/budgets?period=2026-10`
 
-Every non-archived top-level expense category, with its effective budget for the period: `{ "data": [Budget] }`.
+Every non-archived top-level expense category, with its effective budget for the period: `{ "data": [Budget] }`. Ordered by `sort_order`, then name. `period` defaults to current; invalid label is 422 `errors.period`.
 
 #### `PUT /api/v1/budgets/{category_id}`
 
 Request: `{ "amount_cents": 40000, "effective_from": "2026-10" }` (`effective_from` defaults to the current period; `amount_cents` ≥ 0, 0 = stop budgeting). Upserts the `(category_id, effective_from)` row.
-Response 200 `{ "data": Budget }`. Errors: 422 when the category is not a top-level expense category.
+Response 200 `{ "data": Budget }` (the effective budget from `effective_from`; after `amount_cents = 0` both `amount_cents` and `effective_from` are null). Errors: 404 for an unknown category id; 422 `errors.category_id` when the category is an income category, a subcategory or archived; 422 `errors.amount_cents` (missing, not an integer, outside 0..`99_999_999_99`) and `errors.effective_from` (not `YYYY-MM`).
 
 #### `GET /api/v1/budgets/{category_id}/history` → `{ "data": [ { "effective_from": "2026-07", "amount_cents": 40000 } ] }` (newest first)
+
+Includes `amount_cents = 0` rows (stops). 404 for an unknown category id.
+
+#### `DELETE /api/v1/budgets/{category_id}` → 204
+
+Deletes every budget row of the category (stops included), so its history becomes empty and it has no budget in any period. Idempotent: 204 also when the category has no rows. 404 for an unknown category id. `PATCH /categories/{id}` with a `parent_id` returns 422 `errors.parent_id` ("Elimina su presupuesto antes de convertirla en subcategoría.") while the category has budget rows; clearing them with this endpoint lifts the lock (the `categories_budgeted_top_level_only` trigger stays as the safety net).
 
 ### 3.14 Suggestions (M7, RF-13)
 

@@ -12,6 +12,7 @@ import { formatCents } from '../../core/money/format-cents';
 import { ProgressBar, StatTile, formatBasisPoints } from '../../shared/charts';
 import { PageHeader } from '../../shared/layout/page-header';
 import { UiBadge, UiButton, UiEmptyState } from '../../shared/ui';
+import { BudgetCard } from '../budgets/budget-card';
 import { PendingDrafts } from '../drafts/pending-drafts';
 import { ForecastCard } from '../recurring/forecast-card';
 import { netWorthUpdatedLabel, staleAccountsMessage } from '../reports/net-worth-display';
@@ -28,6 +29,7 @@ export const TOP_CATEGORIES = 5;
 @Component({
   selector: 'app-home-page',
   imports: [
+    BudgetCard,
     EurPipe,
     ForecastCard,
     PageHeader,
@@ -209,6 +211,10 @@ export const TOP_CATEGORIES = 5;
 
         <div class="mt-6">
           <app-forecast-card [period]="navigator.label() ?? undefined" />
+        </div>
+
+        <div class="mt-6">
+          <app-budget-card [period]="navigator.label()" />
         </div>
 
         @if (topCategories().length > 0) {

@@ -115,6 +115,21 @@ final class RawLedger
     }
 
     /**
+     * @param  array<string, mixed>  $overrides
+     */
+    public static function budget(int $categoryId, string $effectiveFrom = '2026-07', array $overrides = []): int
+    {
+        return self::insert('budgets', [
+            'category_id' => $categoryId,
+            'amount_cents' => 40000,
+            'effective_from' => $effectiveFrom,
+            'created_at' => now(),
+            'updated_at' => now(),
+            ...$overrides,
+        ]);
+    }
+
+    /**
      * @return array{transfer: int, out: int, in: int}
      */
     public static function balancedTransfer(int $fromAccountId, int $toAccountId, int $amountCents = 5000, string $date = '2026-03-01', string $kind = 'transfer'): array

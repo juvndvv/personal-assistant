@@ -48,8 +48,19 @@ it('serves every report endpoint within the p95 budget on 50k movements', functi
     DB::table('settings')->update(['month_start_day' => $monthStartDay]);
 
     $parent = Category::query()->where('name', 'Perf Gasto 1')->sole();
+    $budgetedParents = Category::query()->where('kind', 'expense')->whereNull('parent_id')->orderBy('id')->limit(3)->pluck('id');
 
-    expect(DB::table('transactions')->whereNull('deleted_at')->count())->toBe(50_000);
+    DB::table('budgets')->insert([
+        ['category_id' => $budgetedParents[0], 'amount_cents' => 40_000, 'effective_from' => '2026-01'],
+        ['category_id' => $budgetedParents[0], 'amount_cents' => 45_000, 'effective_from' => '2026-05'],
+        ['category_id' => $budgetedParents[0], 'amount_cents' => 0, 'effective_from' => '2026-08'],
+        ['category_id' => $budgetedParents[0], 'amount_cents' => 50_000, 'effective_from' => '2026-09'],
+        ['category_id' => $budgetedParents[1], 'amount_cents' => 30_000, 'effective_from' => '2025-11'],
+        ['category_id' => $budgetedParents[2], 'amount_cents' => 0, 'effective_from' => '2026-06'],
+    ]);
+
+    expect(DB::table('transactions')->whereNull('deleted_at')->count())->toBe(50_000)
+        ->and($budgetedParents)->toHaveCount(3);
 
     $endpoints = [
         'summary' => '/api/v1/reports/summary?period=2026-09',
@@ -57,7 +68,13 @@ it('serves every report endpoint within the p95 budget on 50k movements', functi
         'trend by category' => "/api/v1/reports/trend?periods=24&category_id={$parent->id}",
         'net worth' => '/api/v1/reports/net-worth',
         'capture metrics' => '/api/v1/reports/capture-metrics?period=2026-09',
+        'budget vs actual' => '/api/v1/reports/budget-vs-actual?period=2026-09',
     ];
+
+    $this->getJson('/api/v1/reports/budget-vs-actual?period=2026-09')
+        ->assertOk()
+        ->assertJsonPath('data.items.*.category.id', [$budgetedParents[0], $budgetedParents[1]])
+        ->assertJsonPath('data.budgeted_cents', 80_000);
 
     $results = [];
 

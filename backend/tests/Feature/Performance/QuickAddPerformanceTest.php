@@ -51,28 +51,34 @@ beforeEach(function (): void {
     DB::statement('ANALYZE transactions');
 });
 
-it('records a quick-add expense within the latency budget and a bounded query count on 10k rows', function (): void {
-    $payload = fn (): array => [
+function quickAddPayload(): array
+{
+    return [
         'type' => 'expense',
         'amount_cents' => 1_250,
-        'category_id' => $this->categories[0]->id,
+        'category_id' => test()->categories[0]->id,
         'tags' => ['casa', 'nuevo'],
     ];
+}
 
-    $this->postJson('/api/v1/transactions', $payload())->assertCreated();
+function elapsedMs(Closure $callback): int
+{
+    $started = hrtime(true);
+    $callback();
+
+    return intdiv(hrtime(true) - $started, 1_000_000);
+}
+
+it('records a quick-add expense with a bounded query count on 10k rows', function (): void {
+    $this->postJson('/api/v1/transactions', quickAddPayload())->assertCreated();
 
     DB::flushQueryLog();
     DB::enableQueryLog();
-    $started = hrtime(true);
-
-    $this->postJson('/api/v1/transactions', $payload())->assertCreated();
-
-    $elapsedMs = intdiv(hrtime(true) - $started, 1_000_000);
+    $this->postJson('/api/v1/transactions', quickAddPayload())->assertCreated();
     $queries = count(DB::getQueryLog());
     DB::disableQueryLog();
 
-    expect($elapsedMs)->toBeLessThan(POST_TRANSACTION_BUDGET_MS)
-        ->and($queries)->toBeLessThanOrEqual(POST_TRANSACTION_MAX_QUERIES);
+    expect($queries)->toBeLessThanOrEqual(POST_TRANSACTION_MAX_QUERIES);
 });
 
 it('lists, searches and filters 10k rows with a query count independent of the page size', function (): void {
@@ -89,10 +95,23 @@ it('lists, searches and filters 10k rows with a query count independent of the p
     expect($queriesFor('per_page=10'))->toBe($queriesFor('per_page=100'))
         ->and($queriesFor('per_page=10&q=cafe'))->toBe($queriesFor('per_page=100&q=cafe'));
 
-    $started = hrtime(true);
-    $response = $this->getJson('/api/v1/transactions?q=cafe&per_page=100&period=2026-10')->assertOk();
-    $elapsedMs = intdiv(hrtime(true) - $started, 1_000_000);
-
-    expect($response->json('meta.total'))->toBeGreaterThan(0)
-        ->and($elapsedMs)->toBeLessThan(POST_TRANSACTION_BUDGET_MS * 2);
+    $this->getJson('/api/v1/transactions?q=cafe&per_page=100&period=2026-10')
+        ->assertOk()
+        ->assertJsonPath('meta.total', fn (int $total): bool => $total > 0);
 });
+
+it('records a quick-add expense within the latency budget on 10k rows', function (): void {
+    $this->postJson('/api/v1/transactions', quickAddPayload())->assertCreated();
+
+    $elapsed = elapsedMs(fn () => $this->postJson('/api/v1/transactions', quickAddPayload())->assertCreated());
+
+    expect($elapsed)->toBeLessThan(POST_TRANSACTION_BUDGET_MS);
+})->group('perf');
+
+it('searches 10k rows within the latency budget', function (): void {
+    $this->getJson('/api/v1/transactions?per_page=10')->assertOk();
+
+    $elapsed = elapsedMs(fn () => $this->getJson('/api/v1/transactions?q=cafe&per_page=100&period=2026-10')->assertOk());
+
+    expect($elapsed)->toBeLessThan(POST_TRANSACTION_BUDGET_MS * 2);
+})->group('perf');

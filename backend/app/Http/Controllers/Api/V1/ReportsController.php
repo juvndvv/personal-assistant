@@ -9,10 +9,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\NetWorthRequest;
 use App\Http\Requests\Api\V1\ReportPeriodRequest;
 use App\Http\Requests\Api\V1\TrendReportRequest;
+use App\Http\Resources\Api\V1\BudgetVsActualResource;
 use App\Http\Resources\Api\V1\CaptureMetricsResource;
 use App\Http\Resources\Api\V1\NetWorthResource;
 use App\Http\Resources\Api\V1\PeriodSummaryResource;
 use App\Http\Resources\Api\V1\TrendResource;
+use App\Reports\BudgetVsActualReport;
 use App\Reports\CaptureMetricsReport;
 use App\Reports\NetWorthReport;
 use App\Reports\PeriodSummaryReport;
@@ -39,5 +41,10 @@ final class ReportsController extends Controller
     public function captureMetrics(ReportPeriodRequest $request, PeriodResolver $periods, CaptureMetricsReport $report): CaptureMetricsResource
     {
         return new CaptureMetricsResource($report->forPeriod($request->period($periods), CarbonImmutable::now()));
+    }
+
+    public function budgetVsActual(ReportPeriodRequest $request, PeriodResolver $periods, BudgetVsActualReport $report): BudgetVsActualResource
+    {
+        return new BudgetVsActualResource($report->forPeriod($request->period($periods)));
     }
 }
