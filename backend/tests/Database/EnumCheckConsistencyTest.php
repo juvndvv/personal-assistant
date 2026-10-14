@@ -48,6 +48,7 @@ it('mirrors every enum case in its CHECK constraint', function (string $enum, st
 })->with([
     'account type' => [AccountType::class, 'accounts_type_check'],
     'category kind' => [CategoryKind::class, 'categories_kind_check'],
+    'categorization hint kind' => [CategoryKind::class, 'categorization_hints_kind_check'],
     'transaction type' => [TransactionType::class, 'transactions_type_check'],
     'transaction origin' => [TransactionOrigin::class, 'transactions_origin_check'],
     'transfer kind' => [TransferKind::class, 'transfers_kind_check'],

@@ -7,7 +7,7 @@ export const RECURRING_DRAFT_PROMPT = 'Introduce el importe real';
 export const FIELD_SOURCE_LABEL: Record<FieldSource, string> = {
   ai: 'IA',
   default: 'Por defecto',
-  history: 'Sugerida',
+  history: 'De tu historial',
   template: 'Plantilla',
 };
 

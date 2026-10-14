@@ -102,6 +102,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/budgets/budgets.page').then((m) => m.BudgetsPage),
       },
       {
+        path: 'mas/exportar',
+        title: 'Exportar datos · Finanzas',
+        loadComponent: () => import('./features/export/export.page').then((m) => m.ExportPage),
+      },
+      {
         path: 'mas/ajustes',
         title: 'Ajustes · Finanzas',
         loadComponent: () =>

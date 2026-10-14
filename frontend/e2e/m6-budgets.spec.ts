@@ -254,9 +254,20 @@ test.describe('M6 budgets journey', () => {
     });
 
     try {
+      const current = (await api<Period>(page, 'GET', '/api/v1/periods/current')).label;
+      const amount = randomCents();
+      await api(page, 'PUT', `/api/v1/budgets/${category.id}`, {
+        amount_cents: amount,
+        effective_from: shiftLabel(current, -1),
+      });
       await page.goto('/mas/presupuestos');
-      await editBudget(page, category.name, randomCents());
+      await expect(budgetRow(page, category.name).getByTestId('budget-amount')).toHaveText(
+        eur(amount),
+      );
       await editBudget(page, category.name, 0);
+      await expect(budgetRow(page, category.name).getByTestId('budget-amount')).toHaveText(
+        'Sin presupuesto',
+      );
 
       const locked = await request(page, 'PATCH', `/api/v1/categories/${category.id}`, {
         parent_id: host.id,
@@ -269,10 +280,18 @@ test.describe('M6 budgets journey', () => {
       const sheet = page.getByRole('dialog', { name: `Historial de ${category.name}` });
       await expect(sheet.getByTestId('budget-history-entry')).toHaveCount(2);
       await sheet.getByRole('button', { name: 'Eliminar presupuesto e historial' }).click();
-      await sheet
-        .getByRole('group', { name: 'Confirmar eliminación del presupuesto' })
-        .getByRole('button', { name: 'Eliminar' })
-        .click();
+      await Promise.all([
+        page.waitForResponse(
+          (response) =>
+            response.request().method() === 'DELETE' &&
+            new URL(response.url()).pathname === `/api/v1/budgets/${category.id}` &&
+            response.ok(),
+        ),
+        sheet
+          .getByRole('group', { name: 'Confirmar eliminación del presupuesto' })
+          .getByRole('button', { name: 'Eliminar' })
+          .click(),
+      ]);
       await expect(sheet).toBeHidden();
       await expect(budgetRow(page, category.name).getByTestId('budget-amount')).toHaveText(
         'Sin presupuesto',

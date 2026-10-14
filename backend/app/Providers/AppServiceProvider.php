@@ -51,6 +51,10 @@ final class AppServiceProvider extends ServiceProvider
             self::userThrottleKey($request),
         ));
 
+        RateLimiter::for('exports', fn (Request $request): Limit => Limit::perMinute(6)->by(
+            self::userThrottleKey($request),
+        ));
+
         RateLimiter::for('password', fn (Request $request): Limit => Limit::perMinute(5)->by(
             self::passwordThrottleKey($request),
         ));

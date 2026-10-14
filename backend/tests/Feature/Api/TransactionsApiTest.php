@@ -168,6 +168,7 @@ describe('POST /transactions', function (): void {
         'too many tags' => [['tags' => range(1, 11)], 'tags'],
         'blank tag' => [['tags' => ['   ']], 'tags.0'],
         'long tag' => [['tags' => [str_repeat('a', 41)]], 'tags.0'],
+        'tag with the CSV tag separator' => [['tags' => ['casa', 'viaje|roma']], 'tags.1'],
         'unknown draft' => [['draft_id' => 5], 'draft_id'],
     ]);
 

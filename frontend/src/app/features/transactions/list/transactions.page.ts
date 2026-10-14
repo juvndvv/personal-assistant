@@ -5,17 +5,20 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideArrowLeftRight,
   lucideChevronRight,
+  lucideDownload,
   lucideFunnel,
   lucideInbox,
   lucidePlus,
 } from '@ng-icons/lucide';
 import { catchError, debounceTime, distinctUntilChanged, map, of, skip } from 'rxjs';
+import { transactionsCsvUrl } from '../../../core/api/exports.api';
 import { PeriodsApi } from '../../../core/api/periods.api';
 import { Period, TransactionListQuery, TransactionTotals } from '../../../core/api/models';
 import { formatDate } from '../../../core/date/iso-date';
 import { formatPeriodLabel } from '../../../core/date/period-label';
 import { EurPipe } from '../../../core/money/eur.pipe';
 import { PageHeader } from '../../../shared/layout/page-header';
+import { DOWNLOAD_LINK_CLASS } from '../../export/download-link-class';
 import { UiButton, UiInput } from '../../../shared/ui';
 import { PendingDrafts } from '../../drafts/pending-drafts';
 import { MovementSheets } from '../movement-sheets';
@@ -50,6 +53,7 @@ const PERIOD_HISTORY = 24;
     provideIcons({
       lucideArrowLeftRight,
       lucideChevronRight,
+      lucideDownload,
       lucideFunnel,
       lucideInbox,
       lucidePlus,
@@ -85,7 +89,7 @@ const PERIOD_HISTORY = 24;
           (valueChange)="search.set($event)"
         />
       </div>
-      <div class="flex gap-2">
+      <div class="flex flex-wrap gap-2">
         <ui-button variant="outline" (clicked)="filtersOpen.set(true)">
           <ng-icon name="lucideFunnel" aria-hidden="true" />
           {{ filterCount() > 0 ? 'Filtros (' + filterCount() + ')' : 'Filtros' }}
@@ -94,6 +98,12 @@ const PERIOD_HISTORY = 24;
           <ng-icon name="lucideArrowLeftRight" aria-hidden="true" />
           Transferencia
         </ui-button>
+        @if (exportUrl(); as url) {
+          <a [href]="url" download [class]="downloadLinkClass" data-testid="export-csv">
+            <ng-icon name="lucideDownload" aria-hidden="true" />
+            Exportar CSV
+          </a>
+        }
       </div>
     </div>
 
@@ -173,6 +183,12 @@ export class TransactionsPage {
       return null;
     }
     return filtersToListQuery(filters, this.currentPeriod()?.label ?? null);
+  });
+
+  protected readonly downloadLinkClass = DOWNLOAD_LINK_CLASS;
+  protected readonly exportUrl = computed(() => {
+    const query = this.listQuery();
+    return query === null ? null : transactionsCsvUrl(query);
   });
 
   protected readonly scope = computed(() => {

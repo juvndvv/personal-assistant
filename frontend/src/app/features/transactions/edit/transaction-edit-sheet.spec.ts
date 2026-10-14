@@ -18,6 +18,8 @@ import {
   quietAttachmentsApi,
   quietDraftsApi,
 } from '../../drafts/testing/draft-fixtures';
+import { SuggestionsApi } from '../../../core/api/suggestions.api';
+import { aSuggestion, quietSuggestionsApi } from '../testing/suggestion-fakes';
 
 const TREE: Category[] = [
   {
@@ -41,6 +43,17 @@ const TREE: Category[] = [
         archived_at: null,
         children: [],
       },
+      {
+        id: 12,
+        kind: 'expense',
+        name: 'Restaurantes',
+        parent_id: 10,
+        icon: null,
+        color: null,
+        sort_order: 1,
+        archived_at: null,
+        children: [],
+      },
     ],
   },
   {
@@ -56,7 +69,10 @@ const TREE: Category[] = [
   },
 ];
 
-async function setup(transaction: Transaction) {
+async function setup(
+  transaction: Transaction,
+  suggestionsApi: Partial<SuggestionsApi> = quietSuggestionsApi(),
+) {
   const api = {
     update: vi.fn(() => of(transaction)),
     delete: vi.fn(() => of(undefined)),
@@ -67,7 +83,17 @@ async function setup(transaction: Transaction) {
       { provide: DraftsApi, useValue: quietDraftsApi() },
       { provide: AttachmentsApi, useValue: quietAttachmentsApi([anAttachment()]) },
       { provide: TransactionsApi, useValue: api },
-      { provide: AccountsApi, useValue: { list: () => of([anAccount({ id: 3, name: 'BBVA' })]) } },
+      {
+        provide: AccountsApi,
+        useValue: {
+          list: () =>
+            of([
+              anAccount({ id: 3, name: 'BBVA' }),
+              anAccount({ id: 4, name: 'Efectivo', type: 'cash' }),
+            ]),
+        },
+      },
+      { provide: SuggestionsApi, useValue: suggestionsApi },
       { provide: CategoriesApi, useValue: { list: () => of(TREE) } },
       { provide: TagsApi, useValue: { list: () => of([]) } },
       { provide: UiToast, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn() } },
@@ -171,5 +197,58 @@ describe('TransactionEditSheet', () => {
 
     expect(api.delete).toHaveBeenCalledWith(120);
     expect(closed).toHaveBeenCalled();
+  });
+});
+
+describe('TransactionEditSheet suggestions from history', () => {
+  it('keeps the saved category and account when only the merchant text changes', async () => {
+    const suggestionsApi = {
+      categorization: vi.fn(() => of(aSuggestion({ category_id: 12, account_id: 4 }))),
+    };
+    const { api, user } = await setup(aTransaction({ merchant: 'Mercadna' }), suggestionsApi);
+    await screen.findByRole('dialog', { name: 'Editar movimiento' });
+    const merchant = screen.getByRole('textbox', { name: 'Comercio' });
+
+    await user.clear(merchant);
+    await user.type(merchant, 'Mercadona');
+    await user.tab();
+
+    expect(screen.getByRole('combobox', { name: /categoría/i })).toHaveValue('11');
+    expect(screen.getByRole('combobox', { name: /cuenta/i })).toHaveValue('3');
+    expect(screen.queryByTestId('history-suggestion')).not.toBeInTheDocument();
+    expect(suggestionsApi.categorization).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+    expect(api.update).toHaveBeenCalledWith(
+      120,
+      expect.objectContaining({ category_id: 11, account_id: 3, merchant: 'Mercadona' }),
+    );
+  });
+
+  it('fills only the category cleared by a type switch and keeps the saved account', async () => {
+    const suggestionsApi = {
+      categorization: vi.fn(() => of(aSuggestion({ category_id: 50, account_id: 4 }))),
+    };
+    const { api, user } = await setup(aTransaction(), suggestionsApi);
+    await screen.findByRole('dialog', { name: 'Editar movimiento' });
+
+    await user.click(screen.getByRole('radio', { name: 'Ingreso' }));
+
+    expect(suggestionsApi.categorization).toHaveBeenCalledWith({
+      type: 'income',
+      merchant: 'Mercadona',
+      description: 'Compra semanal',
+    });
+    await vi.waitFor(() =>
+      expect(screen.getByRole('combobox', { name: /categoría/i })).toHaveValue('50'),
+    );
+    expect(screen.getByRole('combobox', { name: /cuenta/i })).toHaveValue('3');
+    expect(screen.getByTestId('history-suggestion')).toHaveTextContent('Sugerido por tu historial');
+
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+    expect(api.update).toHaveBeenCalledWith(
+      120,
+      expect.objectContaining({ type: 'income', category_id: 50, account_id: 3 }),
+    );
   });
 });

@@ -203,4 +203,35 @@ describe('TransactionsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Editar BBVA → Ahorro' }));
     expect(sheets.transferRequest()).toEqual({ transferId: 44, fromAccountId: null });
   });
+
+  it('exports the current period as CSV from a same-origin download link', async () => {
+    await setup();
+
+    await screen.findByText('Café');
+    const link = screen.getByRole('link', { name: 'Exportar CSV' });
+    expect(link).toHaveAttribute(
+      'href',
+      '/api/v1/exports/transactions.csv?period=2026-10&delimiter=semicolon',
+    );
+    expect(link).toHaveAttribute('download');
+  });
+
+  it('exports exactly the filtered list', async () => {
+    await setup('/movimientos?q=cafe&period=2026-09&type=expense&account=3&tag=5&receipt=0');
+
+    await screen.findByText('Café');
+    const href = screen.getByRole('link', { name: 'Exportar CSV' }).getAttribute('href') ?? '';
+    const [path, query] = href.split('?');
+    const params = new URLSearchParams(query);
+    expect(path).toBe('/api/v1/exports/transactions.csv');
+    expect(Object.fromEntries(params)).toEqual({
+      q: 'cafe',
+      period: '2026-09',
+      'type[]': 'expense',
+      'account_id[]': '3',
+      'tag_id[]': '5',
+      has_attachments: '0',
+      delimiter: 'semicolon',
+    });
+  });
 });

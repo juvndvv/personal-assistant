@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Transactions;
 
 use App\Actions\Ledger\UpdateBalanceAdjustment;
+use App\Actions\Suggestions\LearnCategorization;
 use App\Actions\Tags\SyncTransactionTags;
 use App\Domain\Ledger\MovementRules;
 use App\Domain\Transactions\Changes;
@@ -22,6 +23,7 @@ final readonly class UpdateTransaction
         private UpdateBalanceAdjustment $updateBalanceAdjustment,
         private MovementRules $rules,
         private SyncTransactionTags $syncTags,
+        private LearnCategorization $learnCategorization,
     ) {}
 
     public function handle(Transaction $transaction, Changes $changes): Transaction
@@ -56,7 +58,12 @@ final readonly class UpdateTransaction
                 }
             }
 
+            $changesCategorization = $transaction->isDirty(['type', 'category_id', 'account_id', 'merchant', 'description']);
             $transaction->save();
+
+            if ($changesCategorization) {
+                $this->learnCategorization->handle($transaction);
+            }
 
             if ($changes->has('tags')) {
                 $this->syncTags->handle($transaction, $changes->strings('tags'));

@@ -143,6 +143,24 @@ describe('DraftReviewPage', () => {
     );
   });
 
+  it('marks values learned from previous corrections as coming from history', async () => {
+    await setup(
+      aDraft({
+        field_sources: { amount_cents: 'ai', category_id: 'history', account_id: 'history' },
+      }),
+    );
+
+    expect(within(fieldContainer('category_id')).getByTestId('field-source')).toHaveTextContent(
+      'De tu historial',
+    );
+    expect(within(fieldContainer('account_id')).getByTestId('field-source')).toHaveTextContent(
+      'De tu historial',
+    );
+    expect(within(fieldContainer('amount_cents')).getByTestId('field-source')).toHaveTextContent(
+      'IA',
+    );
+  });
+
   it('clears the highlight once the user changes the flagged value', async () => {
     const { user } = await setup(aDraft({ low_confidence_fields: ['category_id'] }));
 

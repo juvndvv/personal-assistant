@@ -21,6 +21,8 @@ import { aTransaction } from '../testing/transaction-fixtures';
 import { AttachmentsApi } from '../../../core/api/attachments.api';
 import { DraftsApi } from '../../../core/api/drafts.api';
 import { quietAttachmentsApi, quietDraftsApi } from '../../drafts/testing/draft-fixtures';
+import { SuggestionsApi } from '../../../core/api/suggestions.api';
+import { aSuggestion, quietSuggestionsApi } from '../testing/suggestion-fakes';
 
 function category(
   id: number,
@@ -56,7 +58,10 @@ const DEFAULTS: QuickAddDefaults = {
   frequent_category_ids: { expense: [11, 20, 12], income: [50] },
 };
 
-async function setup(defaults$: Observable<QuickAddDefaults> = of(DEFAULTS)) {
+async function setup(
+  defaults$: Observable<QuickAddDefaults> = of(DEFAULTS),
+  suggestionsApi: Partial<SuggestionsApi> = quietSuggestionsApi(),
+) {
   const transactionsApi = {
     create: vi.fn(() => of(aTransaction({ id: 501 }))),
     delete: vi.fn(() => of(undefined)),
@@ -85,6 +90,7 @@ async function setup(defaults$: Observable<QuickAddDefaults> = of(DEFAULTS)) {
       { provide: CategoriesApi, useValue: { list: vi.fn(() => of(TREE)) } },
       { provide: TagsApi, useValue: { list: vi.fn(() => of([])) } },
       { provide: TransactionsApi, useValue: transactionsApi },
+      { provide: SuggestionsApi, useValue: suggestionsApi },
       { provide: UiToast, useValue: toast },
     ],
   });
@@ -266,5 +272,117 @@ describe('Quick add', () => {
       }),
     );
     expect(await within(dialog).findByText('La fecha no puede ser anterior.')).toBeInTheDocument();
+  });
+});
+
+describe('Quick add suggestions from history', () => {
+  async function openDetails(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(plusButton());
+    const dialog = await screen.findByRole('dialog', { name: 'Nuevo movimiento' });
+    await within(dialog).findByRole('button', { name: 'Supermercado' });
+    await user.click(within(dialog).getByRole('button', { name: 'Más detalles' }));
+    return dialog;
+  }
+
+  function pressed(dialog: HTMLElement, name: string): string | null {
+    return within(dialog).getByRole('button', { name }).getAttribute('aria-pressed');
+  }
+
+  it('fills category and account from the merchant when the user has not touched them', async () => {
+    const suggestionsApi = { categorization: vi.fn(() => of(aSuggestion())) };
+    const { transactionsApi, user } = await setup(of(DEFAULTS), suggestionsApi);
+    const dialog = await openDetails(user);
+
+    await user.type(within(dialog).getByRole('textbox', { name: 'Comercio' }), 'Mercadona');
+    await user.tab();
+
+    expect(suggestionsApi.categorization).toHaveBeenCalledWith({
+      type: 'expense',
+      merchant: 'Mercadona',
+      description: '',
+    });
+    await vi.waitFor(() => expect(pressed(dialog, 'Supermercado')).toBe('true'));
+    expect(within(dialog).getByRole('combobox', { name: /^cuenta/i })).toHaveValue('4');
+    expect(within(dialog).getByTestId('history-suggestion')).toHaveTextContent(
+      'Sugerido por tu historial',
+    );
+
+    await user.type(within(dialog).getByRole('textbox', { name: /importe/i }), '7');
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    expect(transactionsApi.create).toHaveBeenCalledWith(
+      expect.objectContaining({ category_id: 11, account_id: 4, merchant: 'Mercadona' }),
+    );
+  });
+
+  it('never overrides a category or an account picked by the user', async () => {
+    const suggestionsApi = { categorization: vi.fn(() => of(aSuggestion())) };
+    const { user } = await setup(of(DEFAULTS), suggestionsApi);
+    const dialog = await openDetails(user);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Transporte' }));
+    await user.type(within(dialog).getByRole('textbox', { name: 'Comercio' }), 'Mercadona');
+    await user.tab();
+
+    await vi.waitFor(() =>
+      expect(within(dialog).getByRole('combobox', { name: /^cuenta/i })).toHaveValue('4'),
+    );
+    expect(pressed(dialog, 'Transporte')).toBe('true');
+    expect(pressed(dialog, 'Supermercado')).toBe('false');
+
+    await user.selectOptions(within(dialog).getByRole('combobox', { name: /^cuenta/i }), '3');
+    expect(within(dialog).queryByTestId('history-suggestion')).not.toBeInTheDocument();
+    await user.type(within(dialog).getByRole('textbox', { name: 'Descripción' }), 'Compra');
+    await user.tab();
+
+    expect(suggestionsApi.categorization).toHaveBeenCalledTimes(1);
+    expect(within(dialog).getByRole('combobox', { name: /^cuenta/i })).toHaveValue('3');
+  });
+
+  it('looks up the description too and keeps the form unchanged without a hint', async () => {
+    const suggestionsApi = { categorization: vi.fn(() => of(null)) };
+    const { user } = await setup(of(DEFAULTS), suggestionsApi);
+    const dialog = await openDetails(user);
+
+    await user.type(within(dialog).getByRole('textbox', { name: 'Descripción' }), 'Gasolina');
+    await user.tab();
+    await user.tab();
+
+    expect(suggestionsApi.categorization).toHaveBeenCalledTimes(1);
+    expect(suggestionsApi.categorization).toHaveBeenCalledWith({
+      type: 'expense',
+      merchant: '',
+      description: 'Gasolina',
+    });
+    expect(within(dialog).getByRole('combobox', { name: /^cuenta/i })).toHaveValue('3');
+    expect(within(dialog).queryByTestId('history-suggestion')).not.toBeInTheDocument();
+  });
+
+  it('reverts history-filled category and account when the merchant changes to one without a hint', async () => {
+    const suggestionsApi = {
+      categorization: vi.fn((query: { merchant: string }) =>
+        of(query.merchant === 'Mercadona' ? aSuggestion() : null),
+      ),
+    };
+    const { transactionsApi, user } = await setup(of(DEFAULTS), suggestionsApi);
+    const dialog = await openDetails(user);
+    const merchant = within(dialog).getByRole('textbox', { name: 'Comercio' });
+
+    await user.type(merchant, 'Mercadona');
+    await user.tab();
+    await vi.waitFor(() => expect(pressed(dialog, 'Supermercado')).toBe('true'));
+
+    await user.clear(merchant);
+    await user.type(merchant, 'Zara');
+    await user.tab();
+
+    await vi.waitFor(() => expect(pressed(dialog, 'Supermercado')).toBe('false'));
+    expect(within(dialog).getByRole('combobox', { name: /^cuenta/i })).toHaveValue('3');
+    expect(within(dialog).queryByTestId('history-suggestion')).not.toBeInTheDocument();
+
+    await user.type(within(dialog).getByRole('textbox', { name: /importe/i }), '7');
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    expect(transactionsApi.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({ category_id: 11 }),
+    );
   });
 });

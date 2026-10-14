@@ -15,7 +15,7 @@ final class TagNameRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'min:1', 'max:'.TagName::MAX_LENGTH, MovementInputRules::validUtf8()],
+            'name' => ['required', 'string', ...MovementInputRules::tagName()],
         ];
     }
 

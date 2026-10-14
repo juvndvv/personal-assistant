@@ -10,7 +10,7 @@ import {
   untracked,
 } from '@angular/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideArrowLeftRight, lucideChevronDown } from '@ng-icons/lucide';
+import { lucideArrowLeftRight, lucideChevronDown, lucideHistory } from '@ng-icons/lucide';
 import { firstValueFrom } from 'rxjs';
 import { serverMessage } from '../../../core/api/api-error';
 import { EntryType, QuickAddDefaults } from '../../../core/api/models';
@@ -19,6 +19,7 @@ import { TransactionsApi } from '../../../core/api/transactions.api';
 import { formatDate, todayInMadrid } from '../../../core/date/iso-date';
 import { formatCents } from '../../../core/money/format-cents';
 import {
+  UiBadge,
   UiButton,
   UiDateInput,
   UiInput,
@@ -29,6 +30,7 @@ import {
   UiSheetFooter,
 } from '../../../shared/ui';
 import { CATEGORY_ICON_SVGS, iconNameFor } from '../../categories/category-appearance';
+import { HISTORY_SUGGESTION_LABEL, injectCategorizationAssist } from '../categorization-assist';
 import { EntryErrors, entryErrorsFrom, optionalText } from '../entry-errors';
 import { CaptureFlow } from '../../drafts/capture-flow';
 import { MovementActions } from '../movement-actions';
@@ -60,6 +62,7 @@ const SAVED_LABEL: Record<EntryType, string> = {
     CaptureControls,
     NgIcon,
     TagInput,
+    UiBadge,
     UiButton,
     UiDateInput,
     UiInput,
@@ -69,7 +72,14 @@ const SAVED_LABEL: Record<EntryType, string> = {
     UiSheet,
     UiSheetFooter,
   ],
-  providers: [provideIcons({ ...CATEGORY_ICON_SVGS, lucideArrowLeftRight, lucideChevronDown })],
+  providers: [
+    provideIcons({
+      ...CATEGORY_ICON_SVGS,
+      lucideArrowLeftRight,
+      lucideChevronDown,
+      lucideHistory,
+    }),
+  ],
   template: `
     <ui-sheet [(open)]="open" title="Nuevo movimiento">
       @if (processing(); as kind) {
@@ -146,7 +156,7 @@ const SAVED_LABEL: Record<EntryType, string> = {
                     : 'border-border bg-background text-foreground hover:bg-muted'
                 "
                 [attr.aria-pressed]="category.id === categoryId()"
-                (click)="categoryId.set(category.id)"
+                (click)="pickCategory(category.id)"
               >
                 <ng-icon [name]="iconFor(category)" size="16" aria-hidden="true" />
                 {{ category.name }}
@@ -155,6 +165,14 @@ const SAVED_LABEL: Record<EntryType, string> = {
           </div>
           @if (errors().category_id; as message) {
             <p role="alert" class="text-xs text-destructive">{{ message }}</p>
+          }
+          @if (assist.active()) {
+            <div data-testid="history-suggestion">
+              <ui-badge tone="primary" variant="soft">
+                <ng-icon name="lucideHistory" size="14" aria-hidden="true" />
+                {{ historyLabel }}
+              </ui-badge>
+            </div>
           }
         </fieldset>
 
@@ -200,7 +218,8 @@ const SAVED_LABEL: Record<EntryType, string> = {
               [required]="true"
               placeholder="Elige una cuenta"
               [options]="accountOptions()"
-              [(value)]="accountId"
+              [value]="accountId()"
+              (valueChange)="pickAccount($event)"
               [state]="errors().account_id ? 'error' : 'default'"
               [hint]="errors().account_id"
             />
@@ -210,15 +229,22 @@ const SAVED_LABEL: Record<EntryType, string> = {
               placeholder="Elige una categoría"
               [options]="categoryOptions()"
               [value]="categoryId() === null ? null : categoryId() + ''"
-              (valueChange)="categoryId.set($event === null ? null : +$event)"
+              (valueChange)="pickCategory($event === null ? null : +$event)"
             />
             <ui-input
               label="Descripción"
               name="description"
               [maxlength]="255"
               [(value)]="description"
+              (focusout)="suggestFromHistory()"
             />
-            <ui-input label="Comercio" name="merchant" [maxlength]="120" [(value)]="merchant" />
+            <ui-input
+              label="Comercio"
+              name="merchant"
+              [maxlength]="120"
+              [(value)]="merchant"
+              (focusout)="suggestFromHistory()"
+            />
             <ui-input label="Nota" name="note" [maxlength]="1000" [(value)]="note" />
             <app-tag-input [(tags)]="tags" />
             @if (errors().tags; as message) {
@@ -251,6 +277,8 @@ export class QuickAddSheet {
   private readonly sheets = inject(MovementSheets);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly captureFlow = inject(CaptureFlow);
+  protected readonly assist = injectCategorizationAssist();
+  protected readonly historyLabel = HISTORY_SUGGESTION_LABEL;
 
   readonly open = model(false);
 
@@ -386,7 +414,41 @@ export class QuickAddSheet {
     if (type !== this.type()) {
       this.type.set(type);
       this.categoryId.set(null);
+      this.assist.typeChanged();
+      this.suggestFromHistory();
     }
+  }
+
+  protected pickCategory(id: number | null): void {
+    this.categoryId.set(id);
+    this.assist.touchCategory();
+  }
+
+  protected pickAccount(id: string | null): void {
+    this.accountId.set(id);
+    this.assist.touchAccount();
+  }
+
+  protected suggestFromHistory(): void {
+    void this.assist.lookup(
+      { type: this.type(), merchant: this.merchant(), description: this.description() },
+      {
+        acceptsCategory: (id) =>
+          this.reference.categoriesOf(this.type()).some((category) => category.id === id),
+        acceptsAccount: (id) =>
+          this.reference.writableAccounts().some((account) => account.id === id),
+        currentCategory: () => this.categoryId(),
+        currentAccount: () => {
+          const accountId = this.accountId();
+          return accountId === null ? null : Number(accountId);
+        },
+        applyCategory: (id) => this.categoryId.set(id),
+        applyAccount: (id) => {
+          const restored = id ?? this.defaults()?.account_id ?? null;
+          this.accountId.set(restored === null ? null : String(restored));
+        },
+      },
+    );
   }
 
   protected openTransfer(): void {
@@ -467,6 +529,7 @@ export class QuickAddSheet {
     this.merchant.set('');
     this.note.set('');
     this.tags.set([]);
+    this.assist.reset('expense');
     this.detailsOpen.set(false);
     this.failure.set(null);
     this.serverErrors.set({});

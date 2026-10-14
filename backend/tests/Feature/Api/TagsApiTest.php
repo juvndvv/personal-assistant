@@ -71,7 +71,17 @@ it('creates a tag trimmed and lower-cased, returning the existing one on the sam
 
 it('validates tag names', function (mixed $name): void {
     $this->postJson('/api/v1/tags', ['name' => $name])->assertUnprocessable()->assertJsonValidationErrors(['name']);
-})->with([null, '   ', 42, str_repeat('a', 41)]);
+})->with([null, '   ', 42, str_repeat('a', 41), 'viaje|roma']);
+
+it('rejects renaming a tag to a name containing the CSV tag separator', function (): void {
+    $trip = Tag::query()->create(['name' => 'viaje']);
+
+    $this->patchJson("/api/v1/tags/{$trip->id}", ['name' => 'viaje|roma'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['name']);
+
+    expect($trip->fresh()?->name)->toBe('viaje');
+});
 
 it('renames a tag and rejects case-insensitive collisions', function (): void {
     $home = Tag::query()->create(['name' => 'casa']);

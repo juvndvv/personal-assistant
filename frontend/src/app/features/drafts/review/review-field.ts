@@ -2,8 +2,15 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideTriangleAlert } from '@ng-icons/lucide';
 import { FieldSource } from '../../../core/api/models';
-import { UiBadge } from '../../../shared/ui';
+import { UiBadge, UiBadgeTone } from '../../../shared/ui';
 import { FIELD_SOURCE_LABEL } from '../draft-display';
+
+const SOURCE_TONE: Record<FieldSource, UiBadgeTone> = {
+  ai: 'info',
+  history: 'primary',
+  template: 'neutral',
+  default: 'neutral',
+};
 
 @Component({
   selector: 'app-review-field',
@@ -25,7 +32,7 @@ import { FIELD_SOURCE_LABEL } from '../draft-display';
           </span>
         }
         @if (sourceLabel(); as label) {
-          <ui-badge [tone]="source() === 'ai' ? 'info' : 'neutral'" variant="soft">
+          <ui-badge [tone]="sourceTone()" variant="soft">
             <span data-testid="field-source">{{ label }}</span>
           </ui-badge>
         }
@@ -44,6 +51,11 @@ export class ReviewField {
       ? 'block rounded-xl bg-warning/10 p-2 ring-1 ring-warning'
       : 'block rounded-xl',
   );
+
+  protected readonly sourceTone = computed<UiBadgeTone>(() => {
+    const source = this.source();
+    return source === null ? 'neutral' : SOURCE_TONE[source];
+  });
 
   protected readonly sourceLabel = computed(() => {
     const source = this.source();

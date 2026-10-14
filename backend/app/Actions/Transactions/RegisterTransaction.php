@@ -6,6 +6,7 @@ namespace App\Actions\Transactions;
 
 use App\Actions\Drafts\ConfirmDraft;
 use App\Actions\QuickAdd\QuickAddDefaults;
+use App\Actions\Suggestions\LearnCategorization;
 use App\Actions\Tags\SyncTransactionTags;
 use App\Domain\Ledger\MovementRules;
 use App\Enums\CategoryKind;
@@ -26,6 +27,7 @@ final readonly class RegisterTransaction
         private QuickAddDefaults $quickAddDefaults,
         private SyncTransactionTags $syncTags,
         private ConfirmDraft $confirmDraft,
+        private LearnCategorization $learnCategorization,
     ) {}
 
     /**
@@ -77,6 +79,10 @@ final readonly class RegisterTransaction
             $transaction->save();
 
             $this->syncTags->handle($transaction, $tags);
+
+            if ($origin !== TransactionOrigin::Recurring) {
+                $this->learnCategorization->handle($transaction);
+            }
 
             Setting::query()->whereKey(Setting::SINGLETON_ID)->update([
                 'last_used_account_id' => $account->id,

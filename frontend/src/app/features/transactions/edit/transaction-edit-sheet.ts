@@ -9,11 +9,14 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideHistory } from '@ng-icons/lucide';
 import { firstValueFrom } from 'rxjs';
 import { serverMessage } from '../../../core/api/api-error';
 import { EntryType, Transaction, TransactionPatch } from '../../../core/api/models';
 import { TransactionsApi } from '../../../core/api/transactions.api';
 import {
+  UiBadge,
   UiButton,
   UiDateInput,
   UiInput,
@@ -24,12 +27,17 @@ import {
   UiSheetFooter,
   UiToast,
 } from '../../../shared/ui';
+import { HISTORY_SUGGESTION_LABEL, injectCategorizationAssist } from '../categorization-assist';
 import { EntryErrors, entryErrorsFrom, optionalText } from '../entry-errors';
 import { MovementActions } from '../movement-actions';
 import { MovementSheets } from '../movement-sheets';
 import { ReceiptsGallery } from '../receipts/receipts-gallery';
 import { LedgerReferenceData } from '../reference-data';
 import { TagInput } from '../tag-input/tag-input';
+
+function idOrNull(value: string | null): number | null {
+  return value === null ? null : Number(value);
+}
 
 const TYPE_OPTIONS = [
   { value: 'expense', label: 'Gasto' },
@@ -39,8 +47,10 @@ const TYPE_OPTIONS = [
 @Component({
   selector: 'app-transaction-edit-sheet',
   imports: [
+    NgIcon,
     ReceiptsGallery,
     TagInput,
+    UiBadge,
     UiButton,
     UiDateInput,
     UiInput,
@@ -50,6 +60,7 @@ const TYPE_OPTIONS = [
     UiSheet,
     UiSheetFooter,
   ],
+  providers: [provideIcons({ lucideHistory })],
   template: `
     <ui-sheet
       [open]="transaction() !== null"
@@ -98,7 +109,8 @@ const TYPE_OPTIONS = [
             placeholder="Elige una categoría"
             [required]="true"
             [options]="categoryOptions()"
-            [(value)]="categoryId"
+            [value]="categoryId()"
+            (valueChange)="pickCategory($event)"
             [state]="errors().category_id ? 'error' : 'default'"
             [hint]="errors().category_id"
           />
@@ -108,10 +120,19 @@ const TYPE_OPTIONS = [
             placeholder="Elige una cuenta"
             [required]="true"
             [options]="accountOptions()"
-            [(value)]="accountId"
+            [value]="accountId()"
+            (valueChange)="pickAccount($event)"
             [state]="errors().account_id ? 'error' : 'default'"
             [hint]="errors().account_id"
           />
+          @if (assist.active()) {
+            <div data-testid="history-suggestion">
+              <ui-badge tone="primary" variant="soft">
+                <ng-icon name="lucideHistory" size="14" aria-hidden="true" />
+                {{ historyLabel }}
+              </ui-badge>
+            </div>
+          }
         }
         <ui-date-input
           label="Fecha"
@@ -127,8 +148,15 @@ const TYPE_OPTIONS = [
             name="description"
             [maxlength]="255"
             [(value)]="description"
+            (focusout)="suggestFromHistory()"
           />
-          <ui-input label="Comercio" name="merchant" [maxlength]="120" [(value)]="merchant" />
+          <ui-input
+            label="Comercio"
+            name="merchant"
+            [maxlength]="120"
+            [(value)]="merchant"
+            (focusout)="suggestFromHistory()"
+          />
         }
         <ui-input label="Nota" name="note" [maxlength]="1000" [(value)]="note" />
         @if (!isAdjustment()) {
@@ -159,6 +187,8 @@ export class TransactionEditSheet {
   private readonly sheets = inject(MovementSheets);
   private readonly actions = inject(MovementActions);
   private readonly toast = inject(UiToast);
+  protected readonly assist = injectCategorizationAssist();
+  protected readonly historyLabel = HISTORY_SUGGESTION_LABEL;
 
   readonly transaction = input<Transaction | null>(null);
   readonly closed = output<void>();
@@ -243,7 +273,37 @@ export class TransactionEditSheet {
     if (type !== this.type()) {
       this.type.set(type);
       this.categoryId.set(null);
+      this.assist.typeChanged();
+      this.suggestFromHistory();
     }
+  }
+
+  protected pickCategory(id: string | null): void {
+    this.categoryId.set(id);
+    this.assist.touchCategory();
+  }
+
+  protected pickAccount(id: string | null): void {
+    this.accountId.set(id);
+    this.assist.touchAccount();
+  }
+
+  protected suggestFromHistory(): void {
+    if (this.isAdjustment()) {
+      return;
+    }
+    void this.assist.lookup(
+      { type: this.type(), merchant: this.merchant(), description: this.description() },
+      {
+        acceptsCategory: (id) =>
+          this.reference.categoriesOf(this.type()).some((category) => category.id === id),
+        acceptsAccount: (id) => this.accountOptions().some((option) => option.value === String(id)),
+        currentCategory: () => idOrNull(this.categoryId()),
+        currentAccount: () => idOrNull(this.accountId()),
+        applyCategory: (id) => this.categoryId.set(id === null ? null : String(id)),
+        applyAccount: (id) => this.accountId.set(id === null ? null : String(id)),
+      },
+    );
   }
 
   protected async submit(event: Event): Promise<void> {
@@ -326,6 +386,14 @@ export class TransactionEditSheet {
     this.merchant.set(transaction.merchant ?? '');
     this.note.set(transaction.note ?? '');
     this.tags.set(transaction.tags.map((tag) => tag.name));
+    this.assist.reset(this.type(), {
+      merchant: this.merchant(),
+      description: this.description(),
+    });
+    if (this.categoryId() !== null) {
+      this.assist.touchCategory();
+    }
+    this.assist.touchAccount();
     this.failure.set(null);
     this.serverErrors.set({});
     this.attempted.set(false);

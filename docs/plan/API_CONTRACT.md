@@ -543,7 +543,7 @@ Fields: `from_account_id`, `to_account_id`, `amount_cents`, `date`, `note`, `kin
 | PATCH | `/api/v1/tags/{id}` | `{ "name": "..." }` | 200 | 409 `tag_name_taken` |
 | DELETE | `/api/v1/tags/{id}` | | 204 (detaches from movements) | |
 
-Names are trimmed and lower-cased on save.
+Names are trimmed and lower-cased on save. Names must not contain `|` (the tag separator of the CSV export, §3.15); `POST`/`PATCH /tags` and `tags.*` on movements return 422 otherwise.
 
 ### 3.10 Captures, drafts and attachments (M3)
 
@@ -777,16 +777,40 @@ Deletes every budget row of the category (stops included), so its history become
 
 200 `{ "data": { "category_id": 11, "account_id": 7, "source": "history", "hits": 6 } }` or 204 when there is no hint. Lookup: exact normalized key (merchant first, then description), then the best trigram match with similarity ≥ 0.6.
 
+Details (M7):
+- `type` is required (`expense|income`, 422 `errors.type`); `merchant` (≤ 120) and `description` (≤ 255) are optional. Without any usable text the answer is 204.
+- Keys follow `App\Domain\Text\HintKey` (DECISIONS ADR-017): lower-case, unaccented, digits and punctuation removed, trailing legal suffixes (`s.a.`, `s.l.`, `sa`, `sl`) dropped, spaces collapsed. "MERCADONA S.A." and "Mercadona" share the key `mercadona`.
+- Trigram ties are broken by `hits`, then `last_used_at` (newest first).
+- Hints whose category (or its parent) is archived are ignored. `account_id` is `null` when the learned account is archived or deleted.
+- Learning: every `POST /transactions` (including draft confirmation) and every `PATCH /transactions/{id}` that changes the type, category, account, merchant or description of an `expense`/`income` row with a usable merchant or description upserts the `(kind, key)` hint (category and account: last write wins; `hits + 1`). Transfers, adjustments and generated recurring movements (including confirmed variable recurring drafts) never learn.
+- Captures: after sanitization, when the extraction succeeded and the proposal is `expense`/`income`, a hint sets `category_id` (and `account_id` when the hint has a usable account) with `field_sources = history`, confidence `0.95`, and removes them from `low_confidence_fields`. Failed extractions keep the M3 fallback proposal. Recurring drafts never use hints. The provider never receives hints or history.
+
 ### 3.15 Export (M7, RF-50; throttle `exports`)
 
 #### `GET /api/v1/exports/transactions.csv?<same filters as GET /transactions>&delimiter=semicolon`
 
-Streamed CSV, UTF-8 with BOM, `delimiter` `semicolon` (default) or `comma`, CRLF line endings, RFC 4180 quoting, formula-injection guard (cells starting with `=`, `+`, `-`, `@`, tab or CR are prefixed with `'`, except the numeric `amount_cents` column). Every leg is exported (no transfer collapsing). Columns:
+Streamed CSV, UTF-8 with BOM, `delimiter` `semicolon` (default) or `comma`, CRLF line endings, RFC 4180 quoting, formula-injection guard (text cells starting with `=`, `+`, `-`, `@`, tab or CR are prefixed with `'`; integer cells and plain decimal numbers such as `amount_cents`, `amount_eur` and `adjustment_target_cents` are never prefixed, so negative amounts stay numeric). Every leg is exported (no transfer collapsing): the rows are the list's filtered set plus the `in` legs the list collapses. Rows are ordered by `id`. Soft-deleted rows are excluded. Columns:
 
 `id; date; type; account; account_type; category; parent_category; amount_cents; amount_eur; description; merchant; note; tags; origin; transfer_id; transfer_kind; transfer_leg; counter_account; adjustment_target_cents; recurring_template; attachments_count; created_at`
 
-`amount_cents` is signed; `amount_eur` is signed with a comma decimal separator when the delimiter is `semicolon`, dot otherwise. `tags` are joined with `|`.
+`amount_cents` is signed; `amount_eur` is signed with a comma decimal separator when the delimiter is `semicolon`, dot otherwise. `tags` are joined with `|`. `category` is the row's category name and `parent_category` its parent's name (empty for top-level categories); `counter_account` is the other account of a transfer leg; `recurring_template` is the template name; `attachments_count` counts receipts as in the list; `created_at` is ISO 8601. Null values are empty cells. Response headers: `Content-Type: text/csv; charset=UTF-8`, `Content-Disposition: attachment; filename=movimientos-<YYYY-MM-DD-HHMMSS>.csv`. Errors: 422 for invalid list filters (same rules as `GET /transactions`) and for `delimiter`; 429 after 6 exports per minute (shared with `full.zip`).
 
 #### `GET /api/v1/exports/full.zip`
 
 ZIP (built in a temp file, then streamed) containing `accounts.csv` (with current balance), `categories.csv`, `transactions.csv` (as above, unfiltered, including soft-deleted rows with a `deleted_at` column), `transfers.csv`, `tags.csv`, `recurring_templates.csv`, `budgets.csv`, `attachments.csv` (index: id, transaction_id, kind, mime, size, sha256, original_name), `settings.csv`. Receipt files are included under `receipts/` only with `?include_receipts=1`.
+
+Details (M7): query `include_receipts` (`1`/`0`, default `0`) and `delimiter` (as above). Every CSV uses the transactions CSV format (BOM, CRLF, quoting, guard, signed `*_eur` with the delimiter's decimal separator). Response `Content-Type: application/zip`, `Content-Disposition: attachment; filename=finanzas-<YYYY-MM-DD-HHMMSS>.zip`; the temp file is deleted after sending. Files and columns, in this order:
+
+| File | Columns |
+|---|---|
+| `accounts.csv` | `id; name; type; opening_balance_cents; opening_date; statement_day; settlement_account_id; sort_order; balance_cents; balance_eur; archived_at; created_at; deleted_at` (soft-deleted accounts included with empty balance) |
+| `categories.csv` | `id; kind; name; parent_id; parent_name; icon; color; sort_order; archived_at; created_at` |
+| `transactions.csv` | the transactions CSV columns plus `deleted_at` (every row, soft-deleted included) |
+| `transfers.csv` | `id; kind; date; from_account_id; from_account; to_account_id; to_account; amount_cents; amount_eur; note; created_at; deleted_at` |
+| `tags.csv` | `id; name; transactions_count; created_at` |
+| `recurring_templates.csv` | `id; name; type; amount_cents; amount_eur; is_variable; account_id; account; category_id; category; frequency; day_of_month; starts_on; ends_on; description; merchant; note; paused_at; created_at; deleted_at` |
+| `budgets.csv` | `id; category_id; category; effective_from; amount_cents; amount_eur; created_at` |
+| `attachments.csv` | `id; transaction_id; kind; mime; size; sha256; original_name; file; created_at` (kept receipts only, i.e. linked to a movement; `file` is the path inside the ZIP when receipts are included, empty otherwise) |
+| `settings.csv` | `month_start_day; default_account_id; last_used_account_id; orphan_draft_ttl_days; updated_at` |
+
+With `include_receipts=1`, each receipt whose file exists is stored as `receipts/<attachment id>.<extension>`.

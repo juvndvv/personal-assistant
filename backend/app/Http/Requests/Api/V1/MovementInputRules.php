@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Actions\Exports\ExportTransactionsCsv;
 use App\Domain\Ledger\MovementRules;
 use App\Domain\Tags\TagName;
 use Carbon\CarbonImmutable;
@@ -50,8 +51,25 @@ final class MovementInputRules
     {
         return [
             'tags' => ['sometimes', 'array', 'max:'.self::MAX_TAGS],
-            'tags.*' => ['string', 'min:1', 'max:'.TagName::MAX_LENGTH, self::validUtf8()],
+            'tags.*' => ['string', ...self::tagName()],
         ];
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    public static function tagName(): array
+    {
+        return ['min:1', 'max:'.TagName::MAX_LENGTH, self::validUtf8(), self::withoutTagSeparator()];
+    }
+
+    private static function withoutTagSeparator(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail): void {
+            if (is_string($value) && str_contains($value, ExportTransactionsCsv::TAG_SEPARATOR)) {
+                $fail('La etiqueta no puede contener el carácter "'.ExportTransactionsCsv::TAG_SEPARATOR.'".');
+            }
+        };
     }
 
     /**

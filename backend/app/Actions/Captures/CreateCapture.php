@@ -6,6 +6,7 @@ namespace App\Actions\Captures;
 
 use App\Actions\Attachments\StoreReceiptFile;
 use App\Actions\QuickAdd\QuickAddDefaults;
+use App\Actions\Suggestions\SuggestCategorization;
 use App\Ai\CaptureInput;
 use App\Ai\CaptureProcessor;
 use App\Ai\DraftProposal;
@@ -14,6 +15,7 @@ use App\Ai\ExtractionResult;
 use App\Ai\SanitizeExtraction;
 use App\Enums\CaptureKind;
 use App\Enums\CaptureStatus;
+use App\Enums\CategoryKind;
 use App\Enums\DraftStatus;
 use App\Enums\DraftType;
 use App\Models\Attachment;
@@ -31,6 +33,7 @@ final readonly class CreateCapture
         private CaptureProcessor $processor,
         private SanitizeExtraction $sanitizer,
         private QuickAddDefaults $quickAddDefaults,
+        private SuggestCategorization $suggestCategorization,
     ) {}
 
     public function handle(CaptureKind $kind, UploadedFile $file, string $mime, ?CarbonImmutable $clientStartedAt = null): Draft
@@ -65,6 +68,10 @@ final readonly class CreateCapture
         );
         $proposal = $this->sanitizer->handle($result, $catalog, $today, $this->quickAddDefaults->defaultAccountId());
 
+        if ($result->successful) {
+            $proposal = $this->applyHistory($proposal);
+        }
+
         try {
             $draft = DB::transaction(fn (): Draft => $this->complete($capture, $result, $proposal));
         } catch (Throwable $exception) {
@@ -77,6 +84,21 @@ final readonly class CreateCapture
         $draft->setRelation('capture', $capture);
 
         return $draft;
+    }
+
+    private function applyHistory(DraftProposal $proposal): DraftProposal
+    {
+        $kind = CategoryKind::tryFrom((string) $proposal->values['type']);
+
+        if ($kind === null) {
+            return $proposal;
+        }
+
+        $suggestion = $this->suggestCategorization->handle($kind, $proposal->values['merchant'], $proposal->values['description']);
+
+        return $suggestion === null
+            ? $proposal
+            : $proposal->withHistory($suggestion->categoryId, $suggestion->accountId, SanitizeExtraction::HISTORY_CONFIDENCE);
     }
 
     private function complete(Capture $capture, ExtractionResult $result, DraftProposal $proposal): Draft

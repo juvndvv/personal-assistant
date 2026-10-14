@@ -336,7 +336,7 @@ The effective budget of category C in period P is the row with the greatest `eff
 | `last_used_at` | `timestamptz` | NOT NULL |
 | `created_at`, `updated_at` | `timestamptz` | |
 
-`FOREIGN KEY (category_id, kind) REFERENCES categories (id, kind) ON DELETE CASCADE`; `UNIQUE (kind, key)`; GIN trigram index on `key`.
+`FOREIGN KEY (category_id, kind) REFERENCES categories (id, kind) ON DELETE CASCADE`; `UNIQUE (kind, key)`; GIN trigram index on `key`. Also `CHECK (length(trim(key)) > 0)`. Constraint names: `categorization_hints_kind_check`, `categorization_hints_key_not_blank`, `categorization_hints_hits_positive`, `categorization_hints_account_fk`, `categorization_hints_category_kind_fk`, `categorization_hints_kind_key_unique`. Indexes: `categorization_hints_key_trgm` (GIN `gin_trgm_ops`), `(category_id)`, `(account_id)`. Keys are computed in PHP by `App\Domain\Text\HintKey`; writes go through `App\Actions\Suggestions\LearnCategorization` (`INSERT ... ON CONFLICT (kind, key) DO UPDATE`).
 
 ## 4. Derived values (never stored)
 

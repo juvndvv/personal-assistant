@@ -13,7 +13,11 @@ final class SanitizeExtraction
 
     public const string SOURCE_DEFAULT = 'default';
 
+    public const string SOURCE_HISTORY = 'history';
+
     public const float FUTURE_DATE_CONFIDENCE = 0.3;
+
+    public const float HISTORY_CONFIDENCE = 0.95;
 
     private const array TYPES = ['expense', 'income', 'transfer'];
 

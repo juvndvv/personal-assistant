@@ -9,12 +9,14 @@ use App\Http\Controllers\Api\V1\BudgetsController;
 use App\Http\Controllers\Api\V1\CapturesController;
 use App\Http\Controllers\Api\V1\CategoriesController;
 use App\Http\Controllers\Api\V1\DraftsController;
+use App\Http\Controllers\Api\V1\ExportsController;
 use App\Http\Controllers\Api\V1\PeriodsController;
 use App\Http\Controllers\Api\V1\QuickAddController;
 use App\Http\Controllers\Api\V1\RecurringForecastController;
 use App\Http\Controllers\Api\V1\RecurringTemplatesController;
 use App\Http\Controllers\Api\V1\ReportsController;
 use App\Http\Controllers\Api\V1\SettingsController;
+use App\Http\Controllers\Api\V1\SuggestionsController;
 use App\Http\Controllers\Api\V1\TagsController;
 use App\Http\Controllers\Api\V1\TransactionsController;
 use App\Http\Controllers\Api\V1\TransfersController;
@@ -96,6 +98,13 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::put('budgets/{category}', [BudgetsController::class, 'update'])->whereNumber('category')->name('budgets.update');
     Route::delete('budgets/{category}', [BudgetsController::class, 'destroy'])->whereNumber('category')->name('budgets.destroy');
     Route::get('budgets/{category}/history', [BudgetsController::class, 'history'])->whereNumber('category')->name('budgets.history');
+
+    Route::get('suggestions/categorization', [SuggestionsController::class, 'categorization'])->name('suggestions.categorization');
+
+    Route::middleware('throttle:exports')->group(function (): void {
+        Route::get('exports/transactions.csv', [ExportsController::class, 'transactions'])->name('exports.transactions');
+        Route::get('exports/full.zip', [ExportsController::class, 'full'])->name('exports.full');
+    });
 
     Route::get('attachments/{attachment}', [AttachmentsController::class, 'show'])->name('attachments.show');
     Route::delete('attachments/{attachment}', [AttachmentsController::class, 'destroy'])->name('attachments.destroy');

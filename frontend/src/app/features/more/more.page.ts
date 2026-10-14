@@ -4,6 +4,7 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideChevronRight,
   lucideChartPie,
+  lucideDownload,
   lucideFolderTree,
   lucideInbox,
   lucideRepeat,
@@ -60,6 +61,12 @@ const MORE_LINKS: readonly MoreLink[] = [
     icon: 'lucideTags',
   },
   {
+    path: '/mas/exportar',
+    label: 'Exportar datos',
+    description: 'Descarga todo en CSV o un ZIP completo con justificantes.',
+    icon: 'lucideDownload',
+  },
+  {
     path: '/mas/ajustes',
     label: 'Ajustes',
     description: 'Inicio del mes, cuenta por defecto y borradores.',
@@ -74,6 +81,7 @@ const MORE_LINKS: readonly MoreLink[] = [
     provideIcons({
       lucideChartPie,
       lucideChevronRight,
+      lucideDownload,
       lucideFolderTree,
       lucideInbox,
       lucideRepeat,

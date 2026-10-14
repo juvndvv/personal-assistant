@@ -18,4 +18,29 @@ final readonly class DraftProposal
         public array $fieldSources,
         public array $lowConfidenceFields,
     ) {}
+
+    public function withHistory(int $categoryId, ?int $accountId, float $confidence): self
+    {
+        $values = $this->values;
+        $confidenceByField = $this->confidence;
+        $fieldSources = $this->fieldSources;
+        $learned = ['category_id' => $categoryId];
+
+        if ($accountId !== null) {
+            $learned['account_id'] = $accountId;
+        }
+
+        foreach ($learned as $field => $value) {
+            $values[$field] = $value;
+            $confidenceByField[$field] = $confidence;
+            $fieldSources[$field] = SanitizeExtraction::SOURCE_HISTORY;
+        }
+
+        return new self(
+            values: $values,
+            confidence: $confidenceByField,
+            fieldSources: $fieldSources,
+            lowConfidenceFields: array_values(array_diff($this->lowConfidenceFields, array_keys($learned))),
+        );
+    }
 }
