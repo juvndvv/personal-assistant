@@ -139,6 +139,48 @@ it('moves a future date to today with confidence 0.3', function (): void {
         ->and($proposal->lowConfidenceFields)->toContain('date');
 });
 
+it('keeps a future date on a transfer with a valid destination, flagged for review', function (): void {
+    $proposal = sanitizeWith(sanitizerExtraction([
+        'type' => 'transfer', 'account_id' => SANITIZE_DEFAULT_ACCOUNT, 'to_account_id' => SANITIZE_SAVINGS,
+        'date' => '2026-10-30', 'confidence' => ['to_account_id' => 0.9],
+    ]));
+
+    expect($proposal->values)->toMatchArray(['type' => 'transfer', 'date' => '2026-10-30'])
+        ->and($proposal->confidence['date'])->toBe(0.3)
+        ->and($proposal->fieldSources['date'])->toBe('ai')
+        ->and($proposal->lowConfidenceFields)->toBe(['date']);
+});
+
+it('keeps a transfer date exactly at the scheduling limit', function (): void {
+    $limit = day(SANITIZE_TODAY)->addDays(366)->toDateString();
+
+    $proposal = sanitizeWith(sanitizerExtraction([
+        'type' => 'transfer', 'account_id' => SANITIZE_DEFAULT_ACCOUNT, 'to_account_id' => SANITIZE_SAVINGS, 'date' => $limit,
+    ]));
+
+    expect($proposal->values['date'])->toBe($limit);
+});
+
+it('moves a future date to today when the transfer cannot be kept', function (array $overrides): void {
+    $proposal = sanitizeWith(sanitizerExtraction([
+        'type' => 'transfer', 'account_id' => SANITIZE_DEFAULT_ACCOUNT, ...$overrides,
+    ]));
+
+    expect($proposal->values['date'])->toBe(SANITIZE_TODAY)
+        ->and($proposal->confidence['date'])->toBe(0.3)
+        ->and($proposal->lowConfidenceFields)->toContain('date');
+})->with([
+    'downgraded to expense' => [['to_account_id' => null, 'date' => '2026-10-30']],
+    'beyond the scheduling limit' => [['to_account_id' => SANITIZE_SAVINGS, 'date' => '2027-10-15']],
+]);
+
+it('moves a future date on an income to today', function (): void {
+    $proposal = sanitizeWith(sanitizerExtraction(['type' => 'income', 'category_id' => SANITIZE_SALARY, 'date' => '2026-10-30']));
+
+    expect($proposal->values['date'])->toBe(SANITIZE_TODAY)
+        ->and($proposal->lowConfidenceFields)->toContain('date');
+});
+
 it('defaults a missing date to today without flagging it', function (): void {
     $proposal = sanitizeWith(sanitizerExtraction(['date' => null]));
 

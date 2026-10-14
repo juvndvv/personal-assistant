@@ -575,7 +575,7 @@ Errors: 422 (MIME, size); 429.
 Sanitization rules (`App\Ai\SanitizeExtraction`):
 - Unknown, archived or wrong-kind `account_id`/`to_account_id`/`category_id` → null, confidence 0.
 - `amount_cents` ≤ 0 or > max → null, confidence 0.
-- `date` in the future → today, confidence 0.3. Missing date → today, source `default` (not flagged).
+- `date` in the future → today, confidence 0.3, flagged. Exception (scheduled transfer): when the final `type` is `transfer` (after the destination check) and the date is at most 366 days ahead (`MovementRules::MAX_DAYS_IN_FUTURE`), the date is kept with confidence 0.3, source `ai`, flagged. Missing date → today, source `default` (not flagged).
 - `type = transfer` without a valid `to_account_id` → `expense`, flagged.
 - Category kind conflicting with `type` → category null, flagged.
 - Missing account → default account, source `default`, flagged.

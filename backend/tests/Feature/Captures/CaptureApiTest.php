@@ -175,6 +175,41 @@ it('flags low-confidence and sanitized fields in the API', function (): void {
         ->assertJsonPath('data.draft.low_confidence_fields', ['amount_cents', 'date', 'account_id', 'category_id', 'merchant']);
 });
 
+it('keeps the scheduled date of a future transfer and flags it for review', function (): void {
+    $savings = Account::factory()->openedOn(day('2026-01-01'))->create(['name' => 'Ahorro']);
+
+    Captures::postVoice('Traspasa 200 euros a ahorro el día 30', Captures::extraction([
+        'type' => 'transfer',
+        'amount_cents' => 20000,
+        'date' => '2026-10-30',
+        'account_id' => $this->checking->id,
+        'to_account_id' => $savings->id,
+        'category_id' => null,
+        'confidence' => ['to_account_id' => 0.9, 'category_id' => 0.0],
+    ]))
+        ->assertCreated()
+        ->assertJsonPath('data.draft.proposal.type', 'transfer')
+        ->assertJsonPath('data.draft.proposal.date', '2026-10-30')
+        ->assertJsonPath('data.draft.proposal.to_account_id', $savings->id)
+        ->assertJsonPath('data.draft.confidence.date', 0.3)
+        ->assertJsonPath('data.draft.field_sources.date', 'ai')
+        ->assertJsonPath('data.draft.low_confidence_fields', ['date']);
+});
+
+it('moves a future date to today when a transfer without destination becomes an expense', function (): void {
+    Captures::postVoice('Traspasa 200 euros el día 30', Captures::extraction([
+        'type' => 'transfer',
+        'date' => '2026-10-30',
+        'account_id' => $this->checking->id,
+        'to_account_id' => null,
+        'category_id' => $this->groceries->id,
+    ]))
+        ->assertCreated()
+        ->assertJsonPath('data.draft.proposal.type', 'expense')
+        ->assertJsonPath('data.draft.proposal.date', '2026-10-13')
+        ->assertJsonPath('data.draft.confidence.date', 0.3);
+});
+
 it('returns 201 with a usable draft and the transcript when the extractor fails', function (Closure $failure): void {
     Transcription::fake(['Veinte euros en Mercadona'])->preventStrayTranscriptions();
     TransactionExtractor::fake($failure)->preventStrayPrompts();

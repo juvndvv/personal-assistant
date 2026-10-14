@@ -131,8 +131,6 @@ final class SanitizeExtraction
             $this->reject('amount_cents');
         }
 
-        $this->sanitizeDate($raw['date'] ?? null, $score('date'), $today);
-
         $accountIds = $catalog->accountIds();
         $accountId = self::integer($raw['account_id'] ?? null);
 
@@ -157,6 +155,8 @@ final class SanitizeExtraction
                 $this->reject('to_account_id', flagged: false);
             }
         }
+
+        $this->sanitizeDate($raw['date'] ?? null, $score('date'), $today);
 
         $this->sanitizeCategory(self::integer($raw['category_id'] ?? null), $score('category_id'), $catalog);
 
@@ -183,7 +183,16 @@ final class SanitizeExtraction
         }
 
         if ($parsed->greaterThan($today)) {
-            $this->set('date', $today->toDateString(), self::FUTURE_DATE_CONFIDENCE, self::SOURCE_AI, flagged: true);
+            $scheduledTransfer = $this->values['type'] === 'transfer'
+                && $parsed->lessThanOrEqualTo($today->addDays(MovementRules::MAX_DAYS_IN_FUTURE));
+
+            $this->set(
+                'date',
+                $scheduledTransfer ? $parsed->toDateString() : $today->toDateString(),
+                self::FUTURE_DATE_CONFIDENCE,
+                self::SOURCE_AI,
+                flagged: true,
+            );
 
             return;
         }

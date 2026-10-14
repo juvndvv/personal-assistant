@@ -23,7 +23,12 @@ http://localhost:2080 {
 
 	log {
 		output stderr
-		format console
+		format filter {
+			wrap console
+			fields {
+				request>headers>X-Xsrf-Token delete
+			}
+		}
 	}
 
 	root * /app/public

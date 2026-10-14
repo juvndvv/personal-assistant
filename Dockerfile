@@ -23,17 +23,17 @@ ENV APP_ENV=production \
     SERVER_NAME=localhost
 RUN install-php-extensions pdo_pgsql intl zip bcmath opcache pcntl \
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
-    && addgroup -g "${APP_GID}" app \
-    && adduser -D -u "${APP_UID}" -G app app \
+    && (getent group "${APP_GID}" >/dev/null || addgroup -g "${APP_GID}" app) \
+    && adduser -D -u "${APP_UID}" -G "$(getent group "${APP_GID}" | cut -d: -f1)" app \
     && setcap CAP_NET_BIND_SERVICE=+eip /usr/local/bin/frankenphp \
     && mkdir -p /data/caddy /config/caddy \
-    && chown -R app:app /data /config
+    && chown -R "${APP_UID}:${APP_GID}" /data /config
 COPY docker/frankenphp/php.ini "$PHP_INI_DIR/conf.d/zz-app.ini"
 COPY docker/frankenphp/Caddyfile /etc/frankenphp/Caddyfile
 COPY --chmod=755 docker/frankenphp/entrypoint.sh /usr/local/bin/app-entrypoint
 WORKDIR /app
-COPY --chown=app:app --from=vendor /app /app
-COPY --chown=app:app --from=frontend-build /src/dist/frontend/browser /app/public/app
+COPY --chown=${APP_UID}:${APP_GID} --from=vendor /app /app
+COPY --chown=${APP_UID}:${APP_GID} --from=frontend-build /src/dist/frontend/browser /app/public/app
 USER app
 RUN mkdir -p storage/app/private/receipts storage/app/public storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
     && php artisan package:discover --ansi
