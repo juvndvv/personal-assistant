@@ -19,7 +19,7 @@ const MARGIN = { top: 8, right: 8, bottom: 24, left: 56 };
 const MAX_BAR_WIDTH = 24;
 const BAR_GAP = 2;
 const BAR_RADIUS = 4;
-const MIN_LABEL_SPACING = 48;
+const MIN_LABEL_SPACING = 56;
 
 interface BarMark {
   key: string;
@@ -75,7 +75,7 @@ interface OverlayPoint {
                 [attr.y]="tick.y"
                 text-anchor="end"
                 dominant-baseline="middle"
-                class="fill-muted-foreground text-[10px] tabular-nums"
+                class="fill-muted-foreground text-xs tabular-nums"
               >
                 {{ tick.label }}
               </text>
@@ -109,7 +109,7 @@ interface OverlayPoint {
                 [attr.x]="bandCenter(index)"
                 [attr.y]="totalHeight() - 6"
                 text-anchor="middle"
-                class="fill-muted-foreground text-[10px]"
+                class="fill-muted-foreground text-xs"
               >
                 {{ categories()[index]?.label }}
               </text>

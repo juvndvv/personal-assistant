@@ -68,7 +68,7 @@ describe('CategoriesPage', () => {
       name: 'Cafeterías',
       parent_id: 10,
       icon: null,
-      color: '#2E7D32',
+      color: '#1F8A3B',
       sort_order: 2,
     });
   });

@@ -68,7 +68,7 @@ export class UiDateInput {
   protected readonly hintId = computed(() => hintIdFor(this.inputId()));
   protected readonly inputClass = computed(
     () =>
-      `w-full min-w-0 rounded-lg border bg-transparent px-3 outline-none transition-colors focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 ${SIZE_CLASS[this.size()]} ${STATE_CLASS[this.state()]}`,
+      `w-full min-w-0 appearance-none rounded-lg border bg-transparent px-3 text-start text-foreground outline-none transition-colors duration-150 focus-visible:ring-3 [&::-webkit-date-and-time-value]:text-start disabled:cursor-not-allowed disabled:opacity-50 ${SIZE_CLASS[this.size()]} ${STATE_CLASS[this.state()]}`,
   );
 
   protected onInput(event: Event): void {

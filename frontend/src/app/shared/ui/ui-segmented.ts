@@ -2,6 +2,8 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  booleanAttribute,
+  computed,
   inject,
   input,
   model,
@@ -18,19 +20,30 @@ export interface UiSegmentOption {
     <div
       role="radiogroup"
       [attr.aria-label]="ariaLabel()"
-      class="inline-flex w-full gap-1 rounded-xl bg-muted p-1"
+      class="relative grid w-full auto-cols-fr grid-flow-col gap-1 rounded-capsule p-1"
+      [class]="onGlass() ? 'glass-fill' : 'bg-muted dark:bg-grouped'"
+      [style.--segment-count]="options().length"
+      [style.--segment-index]="selectedIndex()"
     >
+      @if (selectedIndex() >= 0) {
+        <span
+          aria-hidden="true"
+          data-testid="segmented-indicator"
+          class="segment-indicator pointer-events-none absolute inset-y-1 start-1 rounded-capsule transition-transform duration-[350ms] ease-spring"
+          [class]="onGlass() ? 'bg-glass-fill' : 'bg-card shadow-sm dark:bg-fill-strong'"
+        ></span>
+      }
       @for (option of options(); track option.value) {
         <button
           type="button"
           role="radio"
           [attr.aria-checked]="option.value === value()"
           [tabIndex]="option.value === value() ? 0 : -1"
-          class="min-h-11 flex-1 rounded-lg px-3 text-sm font-medium transition-colors"
+          class="relative min-h-10 rounded-capsule px-3 text-sm transition-colors duration-150"
           [class]="
             option.value === value()
-              ? 'bg-background text-foreground shadow-xs'
-              : 'text-muted-foreground hover:text-foreground'
+              ? 'font-semibold text-foreground'
+              : 'font-medium text-muted-foreground hover:text-foreground'
           "
           (click)="value.set(option.value)"
           (keydown)="onKeydown($event)"
@@ -46,6 +59,11 @@ export class UiSegmented {
   readonly options = input.required<readonly UiSegmentOption[]>();
   readonly value = model.required<string>();
   readonly ariaLabel = input<string>();
+  readonly onGlass = input(false, { transform: booleanAttribute });
+
+  protected readonly selectedIndex = computed(() =>
+    this.options().findIndex((option) => option.value === this.value()),
+  );
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 

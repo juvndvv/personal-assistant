@@ -4,14 +4,14 @@ import { UiState } from './ui-types';
 
 const HINT_CLASS: Record<UiState, string> = {
   default: 'text-muted-foreground',
-  warning: 'text-warning',
-  error: 'text-destructive',
+  warning: 'text-warning-text',
+  error: 'text-danger-text',
 };
 
 @Component({
   selector: 'ui-field',
   template: `
-    <div class="flex flex-col gap-1.5">
+    <div class="flex flex-col gap-2">
       @if (label()) {
         <div class="flex items-baseline gap-0.5">
           <label [attr.for]="controlId()" class="text-sm font-medium text-foreground">{{
@@ -24,7 +24,12 @@ const HINT_CLASS: Record<UiState, string> = {
       }
       <ng-content />
       @if (hint()) {
-        <p [id]="hintId()" class="text-xs" [class]="hintClass()" [attr.role]="hintRole()">
+        <p
+          [id]="hintId()"
+          class="text-[0.8125rem] leading-snug"
+          [class]="hintClass()"
+          [attr.role]="hintRole()"
+        >
           {{ hint() }}
         </p>
       }

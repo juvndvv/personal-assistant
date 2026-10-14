@@ -64,15 +64,16 @@ const STATE_CLASS: Record<UiState, string> = {
           [id]="listId()"
           [attr.aria-label]="label() ?? ariaLabel() ?? null"
           [hidden]="!expanded()"
-          class="absolute inset-x-0 top-full z-50 mt-1 max-h-60 overflow-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md"
+          class="absolute inset-x-0 top-full z-50 mt-2 max-h-64 overflow-auto rounded-menu bg-popover p-1.5 text-popover-foreground"
         >
           @for (option of options(); track option.value; let index = $index) {
             <li
               role="option"
               [id]="optionId(index)"
               [attr.aria-selected]="index === activeIndex()"
-              class="cursor-pointer rounded-md px-3 py-2 text-sm"
-              [class.bg-muted]="index === activeIndex()"
+              class="cursor-pointer rounded-menu-item px-3 py-2.5 text-sm hover:bg-hover"
+              [class.bg-accent]="index === activeIndex()"
+              [class.font-medium]="index === activeIndex()"
               tabindex="-1"
               (mousedown)="$event.preventDefault()"
               (click)="choose(option)"
@@ -122,7 +123,7 @@ export class UiCombobox {
   });
   protected readonly inputClass = computed(
     () =>
-      `h-10 w-full min-w-0 rounded-lg border bg-transparent px-3 text-base outline-none transition-colors focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm ${STATE_CLASS[this.state()]}`,
+      `h-10 w-full min-w-0 rounded-lg border bg-transparent px-3 text-base outline-none transition-colors duration-150 placeholder:text-subtle-foreground focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm ${STATE_CLASS[this.state()]}`,
   );
 
   protected optionId(index: number): string {

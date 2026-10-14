@@ -1,15 +1,25 @@
 import { chromium } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { splashBackground, splashFile, splashScreens } from './splash-screens.mjs';
+import { splashFile, splashSchemes, splashScreens } from './splash-screens.mjs';
 
 const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
 const standardSizes = [72, 96, 128, 144, 152, 192, 384, 512];
 const maskableSize = 512;
 const maskableSafeZoneScale = 0.7;
+const markTile = '#0D0D0D';
+const markGlyph = '#FFFFFF';
 
 const mark = await readFile(`${publicDir}favicon.svg`, 'utf8');
 const glyph = mark.replace(/<rect[^>]*\/>/, '').replace(/<\/?svg[^>]*>/g, '');
+
+function recolouredMark({ tile, glyph: stroke }) {
+  return mark
+    .replaceAll(markTile, '{tile}')
+    .replaceAll(markGlyph, '{glyph}')
+    .replaceAll('{tile}', tile)
+    .replaceAll('{glyph}', stroke);
+}
 
 function standardPage(size) {
   return `<body style="margin:0">${mark.replace('<svg ', `<svg width="${size}" height="${size}" `)}</body>`;
@@ -17,7 +27,7 @@ function standardPage(size) {
 
 function maskablePage(size) {
   const offset = (512 * (1 - maskableSafeZoneScale)) / 2;
-  return `<body style="margin:0"><svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 512 512"><rect width="512" height="512" fill="#F95A5C"/><g transform="translate(${offset} ${offset}) scale(${maskableSafeZoneScale})">${glyph}</g></svg></body>`;
+  return `<body style="margin:0"><svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 512 512"><rect width="512" height="512" fill="${markTile}"/><g transform="translate(${offset} ${offset}) scale(${maskableSafeZoneScale})">${glyph}</g></svg></body>`;
 }
 
 const browser = await chromium.launch();
@@ -39,20 +49,27 @@ await render(
 );
 await render(standardPage(180), 180, 'icons/apple-touch-icon.png');
 
-function splashPage({ width, height }) {
+function splashPage({ width, height }, scheme) {
   const markSize = Math.round(Math.min(width, height) * 0.3);
-  return `<body style="margin:0;width:${width}px;height:${height}px;display:grid;place-items:center;background:${splashBackground}">${mark.replace('<svg ', `<svg width="${markSize}" height="${markSize}" `)}</body>`;
+  const colours = splashSchemes[scheme];
+  const svg = recolouredMark(colours).replace(
+    '<svg ',
+    `<svg width="${markSize}" height="${markSize}" `,
+  );
+  return `<body style="margin:0;width:${width}px;height:${height}px;display:grid;place-items:center;background:${colours.background}">${svg}</body>`;
 }
 
-for (const screen of splashScreens) {
-  const context = await browser.newContext({
-    viewport: { width: screen.width, height: screen.height },
-    deviceScaleFactor: screen.ratio,
-  });
-  const splash = await context.newPage();
-  await splash.setContent(splashPage(screen));
-  await splash.screenshot({ path: `${publicDir}${splashFile(screen)}` });
-  await context.close();
+for (const scheme of Object.keys(splashSchemes)) {
+  for (const screen of splashScreens) {
+    const context = await browser.newContext({
+      viewport: { width: screen.width, height: screen.height },
+      deviceScaleFactor: screen.ratio,
+    });
+    const splash = await context.newPage();
+    await splash.setContent(splashPage(screen, scheme));
+    await splash.screenshot({ path: `${publicDir}${splashFile(screen, scheme)}` });
+    await context.close();
+  }
 }
 
 await browser.close();

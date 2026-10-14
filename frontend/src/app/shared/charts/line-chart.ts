@@ -13,7 +13,7 @@ import { ChartCategory, ChartSeries, ValueFormatter, seriesColor } from './chart
 import { observeChartWidth } from './chart-width';
 
 const MARGIN = { top: 12, right: 16, bottom: 24, left: 48 };
-const MIN_LABEL_SPACING = 48;
+const MIN_LABEL_SPACING = 56;
 
 interface LinePoint {
   x: number;
@@ -61,7 +61,7 @@ interface LineMark {
                 [attr.y]="tick.y"
                 text-anchor="end"
                 dominant-baseline="middle"
-                class="fill-muted-foreground text-[10px] tabular-nums"
+                class="fill-muted-foreground text-xs tabular-nums"
               >
                 {{ tick.label }}
               </text>
@@ -101,7 +101,7 @@ interface LineMark {
                     [attr.x]="end.x"
                     [attr.y]="end.y - 10"
                     text-anchor="end"
-                    class="fill-foreground text-[11px] font-semibold tabular-nums"
+                    class="fill-foreground text-xs font-semibold tabular-nums"
                     data-testid="end-label"
                   >
                     {{ line.endLabel }}
@@ -114,7 +114,7 @@ interface LineMark {
                 [attr.x]="pointX(index)"
                 [attr.y]="totalHeight() - 6"
                 text-anchor="middle"
-                class="fill-muted-foreground text-[10px]"
+                class="fill-muted-foreground text-xs"
               >
                 {{ categories()[index]?.label }}
               </text>

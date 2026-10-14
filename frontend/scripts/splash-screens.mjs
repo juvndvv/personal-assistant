@@ -1,4 +1,7 @@
-export const splashBackground = '#fafafa';
+export const splashSchemes = {
+  light: { background: '#ffffff', tile: '#0D0D0D', glyph: '#FFFFFF' },
+  dark: { background: '#212121', tile: '#FFFFFF', glyph: '#0D0D0D' },
+};
 
 export const splashScreens = [
   { width: 440, height: 956, ratio: 3 },
@@ -21,10 +24,11 @@ export const splashScreens = [
   { width: 768, height: 1024, ratio: 2 },
 ];
 
-export function splashFile({ width, height, ratio }) {
-  return `icons/splash-${width * ratio}x${height * ratio}.png`;
+export function splashFile({ width, height, ratio }, scheme = 'light') {
+  const prefix = scheme === 'dark' ? 'splash-dark' : 'splash';
+  return `icons/${prefix}-${width * ratio}x${height * ratio}.png`;
 }
 
-export function splashMedia({ width, height, ratio }) {
-  return `(device-width: ${width}px) and (device-height: ${height}px) and (-webkit-device-pixel-ratio: ${ratio}) and (orientation: portrait)`;
+export function splashMedia({ width, height, ratio }, scheme = 'light') {
+  return `(device-width: ${width}px) and (device-height: ${height}px) and (-webkit-device-pixel-ratio: ${ratio}) and (orientation: portrait) and (prefers-color-scheme: ${scheme})`;
 }

@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, Injectable } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Injectable, inject } from '@angular/core';
 import { YuwToasterComponent, yuwToast } from 'yukit-web';
+import { ThemeService } from '../../core/theme/theme.service';
 
 export type UiToastTone = 'success' | 'error' | 'warning' | 'info';
 
@@ -34,7 +35,14 @@ export class UiToast {
 @Component({
   selector: 'ui-toaster',
   imports: [YuwToasterComponent],
-  template: `<yuw-toaster position="top-center" [closeButton]="true" />`,
+  template: `<yuw-toaster
+    position="top-center"
+    [closeButton]="true"
+    [richColors]="false"
+    [theme]="theme.resolved()"
+  />`,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class UiToaster {}
+export class UiToaster {
+  protected readonly theme = inject(ThemeService);
+}

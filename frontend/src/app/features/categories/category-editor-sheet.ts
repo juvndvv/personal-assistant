@@ -10,7 +10,6 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { NgIcon, provideIcons } from '@ng-icons/core';
 import { firstValueFrom } from 'rxjs';
 import { serverMessage, validationErrors } from '../../core/api/api-error';
 import { CategoriesApi } from '../../core/api/categories.api';
@@ -23,12 +22,8 @@ import {
   UiSheet,
   UiSheetFooter,
 } from '../../shared/ui';
-import {
-  CATEGORY_COLORS,
-  CATEGORY_ICONS,
-  CATEGORY_ICON_SVGS,
-  iconNameFor,
-} from './category-appearance';
+import { CATEGORY_COLORS, CATEGORY_ICONS, categoryColorKey } from './category-appearance';
+import { CategoryIcon } from './category-icon';
 
 const NAME_MAX_LENGTH = 60;
 const KIND_LABELS: Record<CategoryKind, string> = { expense: 'Gasto', income: 'Ingreso' };
@@ -39,8 +34,7 @@ export type CategoryEditorTarget =
 
 @Component({
   selector: 'app-category-editor-sheet',
-  imports: [NgIcon, UiButton, UiInput, UiSelect, UiSheet, UiSheetFooter],
-  providers: [provideIcons(CATEGORY_ICON_SVGS)],
+  imports: [CategoryIcon, UiButton, UiInput, UiSelect, UiSheet, UiSheetFooter],
   template: `
     <ui-sheet [(open)]="open" [title]="title()" [description]="context()">
       <form class="flex flex-col gap-5" novalidate (submit)="submit($event)">
@@ -69,13 +63,7 @@ export type CategoryEditorTarget =
               [(value)]="icon"
             />
           </div>
-          <span
-            class="mb-1 flex size-9 shrink-0 items-center justify-center rounded-full border border-border"
-            [style.color]="color()"
-            aria-hidden="true"
-          >
-            <ng-icon [name]="previewIcon()" size="20" />
-          </span>
+          <app-category-icon class="mb-0.5" [icon]="icon()" [color]="color()" />
         </div>
 
         <fieldset>
@@ -97,12 +85,12 @@ export type CategoryEditorTarget =
               <button
                 type="button"
                 role="radio"
-                [attr.aria-checked]="color() === swatch.value"
+                [attr.aria-checked]="selectedKey() === swatch.key"
                 [attr.aria-label]="swatch.label"
-                class="size-9 rounded-full ring-offset-2 ring-offset-background"
-                [class.ring-2]="color() === swatch.value"
-                [class.ring-ring]="color() === swatch.value"
-                [style.background-color]="swatch.value"
+                class="category-swatch size-9 rounded-full ring-offset-2 ring-offset-background"
+                [class.ring-2]="selectedKey() === swatch.key"
+                [class.ring-ring]="selectedKey() === swatch.key"
+                [style.--category-color]="'var(--category-' + swatch.key + ')'"
                 (click)="color.set(swatch.value)"
               ></button>
             }
@@ -140,7 +128,7 @@ export class CategoryEditorSheet {
   private readonly serverNameError = signal<string | null>(null);
   private readonly attempted = signal(false);
 
-  protected readonly previewIcon = computed(() => iconNameFor(this.icon()));
+  protected readonly selectedKey = computed(() => categoryColorKey(this.color()));
   protected readonly title = computed(() => {
     const target = this.target();
     if (target === null || target.mode === 'edit') {

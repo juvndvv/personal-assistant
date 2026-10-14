@@ -2,13 +2,27 @@ import {
   ChangeDetectionStrategy,
   Component,
   Directive,
+  computed,
   contentChild,
   input,
   model,
 } from '@angular/core';
 import { YuwSheetImports } from 'yukit-web';
+import { mediaQuerySignal } from '../../core/theme/media-query';
 
-export type UiSheetSide = 'bottom' | 'right' | 'left' | 'top';
+export type UiSheetSide = 'auto' | 'bottom' | 'right' | 'left' | 'top';
+type ResolvedSheetSide = Exclude<UiSheetSide, 'auto'>;
+
+export const DESKTOP_SHEET_QUERY = '(min-width: 768px)';
+
+const PANEL_CLASS: Record<ResolvedSheetSide, string> = {
+  bottom:
+    'data-[side=bottom]:rounded-t-sheet data-[side=bottom]:border-t-0 data-[side=bottom]:max-h-[92dvh] data-[side=bottom]:pb-[env(safe-area-inset-bottom)]',
+  right:
+    'data-[side=right]:inset-y-3 data-[side=right]:right-3 data-[side=right]:h-auto data-[side=right]:w-[calc(100%-1.5rem)] data-[side=right]:sm:max-w-md data-[side=right]:border-l-0 data-[side=right]:rounded-sheet-floating',
+  left: 'data-[side=left]:inset-y-3 data-[side=left]:left-3 data-[side=left]:h-auto data-[side=left]:w-[calc(100%-1.5rem)] data-[side=left]:sm:max-w-md data-[side=left]:border-r-0 data-[side=left]:rounded-sheet-floating',
+  top: 'data-[side=top]:rounded-b-sheet data-[side=top]:border-b-0 data-[side=top]:pt-[env(safe-area-inset-top)]',
+};
 
 @Directive({ selector: '[uiSheetFooter]' })
 export class UiSheetFooter {}
@@ -20,11 +34,11 @@ export class UiSheetFooter {}
     <yuw-sheet
       [(open)]="open"
       [showTrigger]="false"
-      [side]="side()"
+      [side]="resolvedSide()"
       [title]="title()"
       [description]="description()"
       [closeLabel]="closeLabel()"
-      [panelClass]="side() === 'bottom' ? 'rounded-t-3xl max-h-[92dvh]' : undefined"
+      [panelClass]="panelClass()"
     >
       <ng-content />
       @if (footer()) {
@@ -40,8 +54,18 @@ export class UiSheet {
   readonly open = model(false);
   readonly title = input.required<string>();
   readonly description = input<string>();
-  readonly side = input<UiSheetSide>('bottom');
+  readonly side = input<UiSheetSide>('auto');
   readonly closeLabel = input('Cerrar');
 
   protected readonly footer = contentChild(UiSheetFooter);
+  private readonly desktop = mediaQuerySignal(DESKTOP_SHEET_QUERY);
+
+  protected readonly resolvedSide = computed<ResolvedSheetSide>(() => {
+    const side = this.side();
+    if (side !== 'auto') {
+      return side;
+    }
+    return this.desktop() ? 'right' : 'bottom';
+  });
+  protected readonly panelClass = computed(() => PANEL_CLASS[this.resolvedSide()]);
 }

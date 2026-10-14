@@ -8,12 +8,28 @@ import { PeriodsApi } from '../../core/api/periods.api';
 import { SettingsApi } from '../../core/api/settings.api';
 import { formatDate } from '../../core/date/iso-date';
 import { formatPeriodLabel } from '../../core/date/period-label';
+import { ThemeService, isThemePreference } from '../../core/theme/theme.service';
 import { PageHeader } from '../../shared/layout/page-header';
-import { UiButton, UiInput, UiSelect, UiSelectOption, UiToast } from '../../shared/ui';
+import {
+  UiButton,
+  UiCard,
+  UiInput,
+  UiSegmentOption,
+  UiSegmented,
+  UiSelect,
+  UiSelectOption,
+  UiSwitch,
+  UiToast,
+} from '../../shared/ui';
 
 const MONTH_START_DAYS = Array.from({ length: 28 }, (_, index) => index + 1);
 const TTL_MIN_DAYS = 1;
 const TTL_MAX_DAYS = 90;
+const THEME_OPTIONS: readonly UiSegmentOption[] = [
+  { value: 'light', label: 'Claro' },
+  { value: 'dark', label: 'Oscuro' },
+  { value: 'system', label: 'Sistema' },
+];
 
 interface SettingsErrors {
   month_start_day?: string;
@@ -23,7 +39,7 @@ interface SettingsErrors {
 
 @Component({
   selector: 'app-settings-page',
-  imports: [PageHeader, RouterLink, UiButton, UiInput, UiSelect],
+  imports: [PageHeader, RouterLink, UiButton, UiCard, UiInput, UiSegmented, UiSelect, UiSwitch],
   template: `
     <a
       routerLink="/mas"
@@ -31,6 +47,25 @@ interface SettingsErrors {
       >← Más</a
     >
     <app-page-header title="Ajustes" />
+
+    <section uiCard class="mb-6 flex flex-col gap-4" aria-labelledby="appearance-heading">
+      <h2 id="appearance-heading" class="text-lg font-semibold text-foreground">Apariencia</h2>
+      <div class="flex flex-col gap-2">
+        <p id="theme-label" class="text-sm font-medium text-foreground">Tema</p>
+        <ui-segmented
+          ariaLabel="Tema"
+          [options]="themeOptions"
+          [value]="theme.preference()"
+          (valueChange)="onThemeChange($event)"
+        />
+      </div>
+      <ui-switch
+        [checked]="theme.reducedTransparency()"
+        (checkedChange)="theme.setReducedTransparency($event)"
+        description="Usa superficies opacas en barras, paneles y menús."
+        >Reducir transparencia</ui-switch
+      >
+    </section>
 
     @if (failure(); as message) {
       <p role="alert" class="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -115,6 +150,8 @@ export class SettingsPage {
   private readonly periodsApi = inject(PeriodsApi);
   private readonly accountsApi = inject(AccountsApi);
   private readonly toast = inject(UiToast);
+  protected readonly theme = inject(ThemeService);
+  protected readonly themeOptions = THEME_OPTIONS;
 
   protected readonly dayOptions: UiSelectOption[] = MONTH_START_DAYS.map((day) => ({
     value: String(day),
@@ -162,6 +199,12 @@ export class SettingsPage {
 
   protected longDate(date: string): string {
     return formatDate(date, 'medium');
+  }
+
+  protected onThemeChange(value: string): void {
+    if (isThemePreference(value)) {
+      this.theme.setPreference(value);
+    }
   }
 
   protected onMonthStartDayChange(value: string | null): void {

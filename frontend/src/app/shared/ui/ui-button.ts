@@ -23,12 +23,14 @@ const VARIANTS: Record<UiButtonVariant, { variant: YuwButtonVariant; color: YuwC
   link: { variant: 'link', color: 'primary' },
 };
 
-const SIZES: Record<UiButtonSize, YuwButtonSize> = {
-  sm: 'sm',
-  md: 'default',
-  lg: 'lg',
-  icon: 'icon',
+const SIZES: Record<UiButtonSize, { size: YuwButtonSize; shape: string }> = {
+  sm: { size: 'sm', shape: 'h-9 gap-1.5 px-3.5 text-sm' },
+  md: { size: 'default', shape: 'h-11 gap-2 px-5 text-[0.9375rem]' },
+  lg: { size: 'lg', shape: 'h-12 gap-2 px-6 text-base' },
+  icon: { size: 'icon', shape: 'size-11 px-0' },
 };
+
+const CAPSULE = 'rounded-capsule font-medium';
 
 @Component({
   selector: 'ui-button',
@@ -40,11 +42,11 @@ const SIZES: Record<UiButtonSize, YuwButtonSize> = {
     <yuw-button
       [variant]="mapped().variant"
       [color]="mapped().color"
-      [size]="yuwSize()"
+      [size]="sizing().size"
       [type]="type()"
       [disabled]="disabled() || loading()"
       [ariaLabel]="ariaLabel()"
-      [class]="fullWidth() ? 'w-full' : ''"
+      [class]="buttonClass()"
       (clicked)="clicked.emit($event)"
     >
       @if (loading()) {
@@ -68,5 +70,14 @@ export class UiButton {
   readonly clicked = output<MouseEvent>();
 
   protected readonly mapped = computed(() => VARIANTS[this.variant()]);
-  protected readonly yuwSize = computed(() => SIZES[this.size()]);
+  protected readonly sizing = computed(() => SIZES[this.size()]);
+  protected readonly buttonClass = computed(() =>
+    [
+      this.variant() === 'link' ? 'font-medium' : CAPSULE,
+      this.variant() === 'link' ? '' : this.sizing().shape,
+      this.fullWidth() ? 'w-full' : '',
+    ]
+      .filter((part) => part !== '')
+      .join(' '),
+  );
 }

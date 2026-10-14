@@ -43,7 +43,7 @@ const PENDING_SIGN = /^\s*[-\u2212]\s*$/;
         [required]="required()"
         [disabled]="disabled()"
         [invalid]="effectiveState() === 'error'"
-        class="tabular-amount"
+        class="amount"
       >
         <yuw-right-addon><span aria-hidden="true">€</span></yuw-right-addon>
       </yuw-input>

@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  computed,
   inject,
   input,
   model,
@@ -18,8 +19,16 @@ export interface UiTabItem {
     <div
       role="tablist"
       [attr.aria-label]="ariaLabel()"
-      class="inline-flex w-full gap-1 rounded-xl bg-muted p-1 sm:w-auto"
+      class="relative grid w-full auto-cols-fr grid-flow-col gap-1 rounded-capsule bg-muted p-1 dark:bg-grouped sm:inline-grid sm:w-auto"
+      [style.--segment-count]="tabs().length"
+      [style.--segment-index]="activeIndex()"
     >
+      @if (activeIndex() >= 0) {
+        <span
+          aria-hidden="true"
+          class="segment-indicator pointer-events-none absolute inset-y-1 start-1 rounded-capsule bg-card shadow-sm transition-transform duration-[350ms] ease-spring dark:bg-fill-strong"
+        ></span>
+      }
       @for (tab of tabs(); track tab.id) {
         <button
           type="button"
@@ -28,11 +37,11 @@ export interface UiTabItem {
           [attr.aria-selected]="tab.id === active()"
           [attr.aria-controls]="panelId() ?? null"
           [tabIndex]="tab.id === active() ? 0 : -1"
-          class="flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none"
+          class="relative min-h-10 rounded-capsule px-4 text-sm whitespace-nowrap transition-colors duration-150"
           [class]="
             tab.id === active()
-              ? 'bg-background text-foreground shadow-xs'
-              : 'text-muted-foreground hover:text-foreground'
+              ? 'font-semibold text-foreground'
+              : 'font-medium text-muted-foreground hover:text-foreground'
           "
           (click)="active.set(tab.id)"
           (keydown)="onKeydown($event)"
@@ -50,6 +59,10 @@ export class UiTabs {
   readonly ariaLabel = input<string>();
   readonly panelId = input<string>();
   readonly idPrefix = input('ui-tab');
+
+  protected readonly activeIndex = computed(() =>
+    this.tabs().findIndex((tab) => tab.id === this.active()),
+  );
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 

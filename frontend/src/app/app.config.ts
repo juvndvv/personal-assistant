@@ -13,6 +13,7 @@ import { provideServiceWorker } from '@angular/service-worker';
 import { routes } from './app.routes';
 import { provideApiHttp } from './core/http/provide-api-http';
 import { AppUpdates } from './core/pwa/app-updates';
+import { ThemeService } from './core/theme/theme.service';
 
 registerLocaleData(localeEs);
 
@@ -25,6 +26,9 @@ export const appConfig: ApplicationConfig = {
     provideServiceWorker('ngsw-worker.js', {
       enabled: !isDevMode(),
       registrationStrategy: 'registerWhenStable:30000',
+    }),
+    provideAppInitializer(() => {
+      inject(ThemeService);
     }),
     provideAppInitializer(() => inject(AppUpdates).watch()),
   ],

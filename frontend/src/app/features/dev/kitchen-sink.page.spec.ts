@@ -67,3 +67,31 @@ describe('KitchenSinkPage (yukit-web gate)', () => {
     expect(await screen.findByText('Formulario rápido.')).toBeInTheDocument();
   });
 });
+
+describe('KitchenSinkPage (design system)', () => {
+  afterEach(() => {
+    localStorage.clear();
+    document.documentElement.classList.remove('dark');
+  });
+
+  it('shows the new components in the current and forced dark theme', async () => {
+    await render(KitchenSinkPage);
+
+    for (const testId of ['showcase-light', 'showcase-dark']) {
+      const panel = within(screen.getByTestId(testId));
+      expect(panel.getAllByRole('alert')).toHaveLength(2);
+      expect(panel.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+      expect(panel.getByText('Cargando ejemplo')).toBeInTheDocument();
+      expect(panel.getByText(/^\+1\.?850,00/)).toBeInTheDocument();
+    }
+    expect(screen.getByTestId('showcase-dark')).toHaveClass('dark');
+  });
+
+  it('switches the application theme', async () => {
+    await render(KitchenSinkPage);
+
+    await userEvent.setup().click(screen.getByRole('radio', { name: 'Oscuro' }));
+
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+  });
+});

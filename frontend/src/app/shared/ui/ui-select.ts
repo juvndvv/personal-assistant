@@ -94,7 +94,7 @@ export class UiSelect {
   protected readonly hintId = computed(() => hintIdFor(this.selectId()));
   protected readonly selectClass = computed(
     () =>
-      `w-full min-w-0 appearance-none rounded-lg border bg-transparent ps-3 pe-9 outline-none transition-colors focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 ${SIZE_CLASS[this.size()]} ${STATE_CLASS[this.state()]}`,
+      `w-full min-w-0 appearance-none rounded-lg border bg-transparent ps-3 pe-9 text-foreground outline-none transition-colors duration-150 focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 ${SIZE_CLASS[this.size()]} ${STATE_CLASS[this.state()]}`,
   );
 
   protected onChange(event: Event): void {

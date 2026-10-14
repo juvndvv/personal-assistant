@@ -1,6 +1,6 @@
 import { access, readFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { splashFile, splashScreens } from './splash-screens.mjs';
+import { splashFile, splashSchemes, splashScreens } from './splash-screens.mjs';
 
 const browserDir = fileURLToPath(new URL('../dist/frontend/browser/', import.meta.url));
 const indexHtml = await readFile(`${browserDir}index.html`, 'utf8');
@@ -48,12 +48,14 @@ for (const pattern of requiredHead) {
   }
 }
 
-for (const screen of splashScreens) {
-  const file = splashFile(screen);
-  if (!indexHtml.includes(`href="${file}"`)) {
-    fail(`index.html has no apple-touch-startup-image link for ${file}`);
+for (const scheme of Object.keys(splashSchemes)) {
+  for (const screen of splashScreens) {
+    const file = splashFile(screen, scheme);
+    if (!indexHtml.includes(`href="${file}"`)) {
+      fail(`index.html has no apple-touch-startup-image link for ${file}`);
+    }
+    await access(`${browserDir}${file}`).catch(() => fail(`${file} is missing from the build`));
   }
-  await access(`${browserDir}${file}`).catch(() => fail(`${file} is missing from the build`));
 }
 
 const ngsw = JSON.parse(await readFile(`${browserDir}ngsw.json`, 'utf8'));

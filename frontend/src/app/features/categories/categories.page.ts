@@ -26,8 +26,8 @@ import {
   UiTabs,
   UiToast,
 } from '../../shared/ui';
-import { CATEGORY_ICON_SVGS, iconNameFor } from './category-appearance';
 import { CategoryEditorSheet, CategoryEditorTarget } from './category-editor-sheet';
+import { CategoryIcon } from './category-icon';
 import { MoveDirection, nextSortOrder, siblingsOf, sortOrderChangesForMove } from './category-tree';
 
 const CONFLICT_MESSAGES: Record<string, string> = {
@@ -45,6 +45,7 @@ const KIND_TABS: readonly UiTabItem[] = [
   selector: 'app-categories-page',
   imports: [
     CategoryEditorSheet,
+    CategoryIcon,
     NgIcon,
     NgTemplateOutlet,
     PageHeader,
@@ -58,7 +59,6 @@ const KIND_TABS: readonly UiTabItem[] = [
   ],
   providers: [
     provideIcons({
-      ...CATEGORY_ICON_SVGS,
       lucideArchive,
       lucideArchiveRestore,
       lucideChevronDown,
@@ -152,13 +152,7 @@ const KIND_TABS: readonly UiTabItem[] = [
 
     <ng-template #row let-category let-first="first" let-last="last">
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
-        <span
-          class="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted"
-          [style.color]="category.color"
-          aria-hidden="true"
-        >
-          <ng-icon [name]="iconName(category.icon)" size="18" />
-        </span>
+        <app-category-icon size="sm" [icon]="category.icon" [color]="category.color" />
         <span class="flex min-w-0 flex-1 basis-40 items-center">
           <span
             class="truncate"
@@ -282,7 +276,6 @@ export class CategoriesPage {
   protected readonly deleteDescription = computed(
     () => `¿Seguro que quieres eliminar ${this.deleteCandidate()?.name ?? 'esta categoría'}?`,
   );
-  protected readonly iconName = iconNameFor;
   private latestRequest = 0;
 
   constructor() {

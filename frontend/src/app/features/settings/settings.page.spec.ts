@@ -114,3 +114,25 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Indica un número de días entre 1 y 90.')).toBeInTheDocument();
   });
 });
+
+describe('SettingsPage appearance', () => {
+  afterEach(() => {
+    localStorage.clear();
+    document.documentElement.classList.remove('dark');
+    document.documentElement.removeAttribute('data-transparency');
+  });
+
+  it('switches the theme and reduced transparency', async () => {
+    const { user } = await setup();
+
+    await user.click(screen.getByRole('radio', { name: 'Oscuro' }));
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(screen.getByRole('radio', { name: 'Oscuro' })).toHaveAttribute('aria-checked', 'true');
+
+    await user.click(screen.getByRole('radio', { name: 'Claro' }));
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+
+    await user.click(screen.getByRole('switch', { name: /reducir transparencia/i }));
+    expect(document.documentElement.getAttribute('data-transparency')).toBe('reduced');
+  });
+});
