@@ -53,7 +53,7 @@ export class ChartLegend {
   template: `
     <div
       role="status"
-      class="pointer-events-none absolute top-0 z-10 min-w-36 -translate-x-1/2 rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md"
+      class="glass-menu pointer-events-none absolute top-0 z-10 min-w-36 -translate-x-1/2 rounded-menu px-3 py-2 text-xs"
       [style.left.px]="left()"
       data-testid="chart-tooltip"
     >
@@ -91,7 +91,7 @@ export class ChartTooltip {
   selector: 'app-chart-data-table',
   template: `
     <details class="mt-2 text-xs">
-      <summary class="cursor-pointer text-muted-foreground hover:text-foreground">
+      <summary class="cursor-pointer py-2 text-sm text-muted-foreground hover:text-foreground">
         Ver datos en tabla
       </summary>
       <div class="mt-2 overflow-x-auto">

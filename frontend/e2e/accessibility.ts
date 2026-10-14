@@ -33,6 +33,8 @@ export async function smallTapTargets(page: Page): Promise<SmallTarget[]> {
       '[role="radio"]',
       '[role="menuitem"]',
     ].join(',');
+    const hitArea = (element: Element): Element =>
+      element.getAttribute('role') === 'switch' ? (element.closest('label') ?? element) : element;
     const inlineInText = (element: Element): boolean =>
       element.tagName === 'A' && getComputedStyle(element).display === 'inline';
     const describe = (element: Element): string => {
@@ -47,7 +49,7 @@ export async function smallTapTargets(page: Page): Promise<SmallTarget[]> {
       .filter((element) => !(element as HTMLButtonElement).disabled)
       .filter((element) => !inlineInText(element))
       .filter((element) => element.getAttribute('role') !== 'checkbox')
-      .map((element) => ({ element, box: element.getBoundingClientRect() }))
+      .map((element) => ({ element, box: hitArea(element).getBoundingClientRect() }))
       .filter(({ box }) => box.width > 0 && box.height > 0)
       .filter(({ box }) => box.width < minimum - 0.5 || box.height < minimum - 0.5)
       .map(({ element, box }) => ({

@@ -4,14 +4,16 @@ import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { screen, within } from '@testing-library/angular';
 import userEvent from '@testing-library/user-event';
-import { Observable, of, throwError } from 'rxjs';
+import { NEVER, Observable, of, throwError } from 'rxjs';
 import { BudgetsApi } from '../../core/api/budgets.api';
 import { Budget, BudgetInput, BudgetVsActual } from '../../core/api/models';
 import { PeriodsApi } from '../../core/api/periods.api';
 import { ReportsApi } from '../../core/api/reports.api';
 import { formatCents } from '../../core/money/format-cents';
 import { UiToast } from '../../shared/ui';
+import { aCategory } from '../categories/testing/category-fixtures';
 import { aPeriod } from '../reports/testing/report-fixtures';
+import { referenceDataProviders } from '../transactions/testing/reference-fakes';
 import { BudgetsPage } from './budgets.page';
 import {
   aBudget,
@@ -28,11 +30,14 @@ interface SetupOptions {
   set?: (categoryId: number, input: BudgetInput) => Observable<Budget>;
   budgetVsActual?: (period?: string) => Observable<BudgetVsActual>;
   clear?: (categoryId: number) => Observable<void>;
+  list?: (period?: string) => Observable<Budget[]>;
 }
 
 async function setup(options: SetupOptions = {}) {
   const budgets = {
-    list: vi.fn((period?: string) => of(period === undefined ? [] : aBudgetList())),
+    list: vi.fn(
+      options.list ?? ((period?: string) => of(period === undefined ? [] : aBudgetList())),
+    ),
     set: vi.fn(
       options.set ??
         ((categoryId: number, input: BudgetInput) =>
@@ -60,6 +65,7 @@ async function setup(options: SetupOptions = {}) {
       { provide: ReportsApi, useValue: reports },
       { provide: PeriodsApi, useValue: { current: () => of(aPeriod('2026-10')) } },
       { provide: UiToast, useValue: toast },
+      ...referenceDataProviders([aCategory({ id: 10, name: 'Alimentación', color: '#4F46C8' })]),
       provideRouter([{ path: 'mas/presupuestos', component: BudgetsPage }]),
     ],
   });
@@ -105,6 +111,12 @@ describe('BudgetsPage', () => {
     const leisure = await row('Ocio');
     expect(within(leisure).getByTestId('budget-amount')).toHaveTextContent('Sin presupuesto');
     expect(within(leisure).queryByTestId('budget-actual')).not.toBeInTheDocument();
+    expect(within(leisure).getByText('Ocio')).not.toHaveClass('truncate');
+    await vi.waitFor(() =>
+      expect(food.querySelector('app-category-icon')?.getAttribute('style')).toContain(
+        '--category-color: var(--category-indigo)',
+      ),
+    );
 
     expect(plain(screen.getByTestId('budget-total').textContent)).toContain(
       plain(formatCents(130000)),
@@ -419,5 +431,58 @@ describe('BudgetsPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'No se pudieron cargar los presupuestos.',
     );
+  });
+  it('flags budgets near or over their limit with an icon and a label, not only colour', async () => {
+    await setup();
+
+    const food = await row('Alimentación');
+    expect(food).toHaveAttribute('data-status', 'over');
+    expect(within(within(food).getByTestId('budget-actual')).getByText('Superado')).toBeVisible();
+    const housing = await row('Vivienda');
+    expect(housing).toHaveAttribute('data-status', 'warning');
+    expect(within(housing).getByText('Cerca del límite')).toBeInTheDocument();
+
+    const attention = screen.getByTestId('budget-attention');
+    expect(plain(attention.textContent)).toContain('Superado en 1 categoría');
+    expect(plain(attention.textContent)).toContain('Cerca del límite en 1 categoría');
+  });
+
+  it('shows a skeleton until the budgets arrive', async () => {
+    await setup({ list: () => NEVER });
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Cargando presupuestos');
+    expect(screen.queryAllByTestId('budget-category')).toHaveLength(0);
+  });
+
+  it('retries loading the budgets after a failure', async () => {
+    const { budgets, harness, user } = await setup();
+    budgets.list.mockReturnValue(throwError(() => new Error('offline')));
+    await harness.navigateByUrl('/mas/presupuestos?period=2026-09', BudgetsPage);
+    harness.detectChanges();
+    await screen.findByRole('alert');
+
+    budgets.list.mockReturnValue(of(aBudgetList()));
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    harness.detectChanges();
+
+    expect(await row('Alimentación')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('retries the budget history when it cannot be loaded', async () => {
+    const { budgets, user } = await setup();
+    budgets.history.mockReturnValue(throwError(() => new Error('offline')));
+    const food = await row('Alimentación');
+
+    await user.click(within(food).getByRole('button', { name: 'Historial de Alimentación' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Historial de Alimentación' });
+    expect(await within(sheet).findByRole('alert')).toHaveTextContent(
+      'No se pudo cargar el historial.',
+    );
+
+    budgets.history.mockReturnValue(of(aBudgetHistory()));
+    await user.click(within(sheet).getByRole('button', { name: 'Reintentar' }));
+
+    expect(await within(sheet).findAllByTestId('budget-history-entry')).toHaveLength(3);
   });
 });

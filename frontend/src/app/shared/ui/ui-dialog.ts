@@ -21,6 +21,7 @@ export class UiDialogFooter {}
       [title]="title()"
       [description]="description()"
       [closeLabel]="closeLabel()"
+      panelClass="w-[min(calc(100vw-2rem),25rem)] max-w-none sm:max-w-none"
     >
       <ng-content />
       @if (footer()) {

@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
-import { catchError, combineLatest, of, switchMap } from 'rxjs';
+import { catchError, combineLatest, map, of, switchMap, tap } from 'rxjs';
 import { ForecastItem, PeriodLabel, RecurringForecast } from '../../core/api/models';
 import { RecurringApi } from '../../core/api/recurring.api';
 import { formatDate } from '../../core/date/iso-date';
 import { EurPipe } from '../../core/money/eur.pipe';
-import { UiBadge } from '../../shared/ui';
+import { UiAlert, UiBadge, UiCard, UiSkeleton } from '../../shared/ui';
 import { MovementSheets } from '../transactions/movement-sheets';
 import { FORECAST_STATUS_LABELS } from './recurring-display';
 
@@ -14,11 +14,33 @@ const PENDING_STATUSES = new Set<ForecastItem['status']>(['upcoming', 'awaiting_
 
 @Component({
   selector: 'app-forecast-card',
-  imports: [EurPipe, RouterLink, UiBadge],
+  imports: [EurPipe, RouterLink, UiAlert, UiBadge, UiCard, UiSkeleton],
   template: `
-    @if (forecast(); as data) {
+    @if (failed()) {
+      <section uiCard padding="lg" aria-labelledby="forecast-heading" data-testid="forecast-error">
+        <h2 id="forecast-heading" class="text-lg font-semibold text-foreground">
+          Fijos pendientes este periodo
+        </h2>
+        <ui-alert class="mt-3" retryable [retrying]="retrying()" (retry)="retry()">
+          No se pudieron cargar los fijos pendientes.
+        </ui-alert>
+      </section>
+    } @else if (loading()) {
+      <ui-card padding="lg" data-testid="forecast-loading">
+        <div role="status" aria-live="polite">
+          <span class="sr-only">Cargando fijos pendientes</span>
+          <ui-skeleton shape="title" />
+          <div class="mt-4 grid grid-cols-2 gap-3">
+            <ui-skeleton shape="block" height="4rem" />
+            <ui-skeleton shape="block" height="4rem" />
+          </div>
+          <ui-skeleton class="mt-4" [lines]="3" />
+        </div>
+      </ui-card>
+    } @else if (forecast(); as data) {
       <section
-        class="rounded-2xl border border-border bg-background p-5"
+        uiCard
+        padding="lg"
         aria-labelledby="forecast-heading"
         data-testid="recurring-forecast"
       >
@@ -35,21 +57,21 @@ const PENDING_STATUSES = new Set<ForecastItem['status']>(['upcoming', 'awaiting_
           </p>
           <a
             routerLink="/mas/fijos"
-            class="mt-2 inline-block text-sm text-primary-text hover:underline"
+            class="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-link hover:underline"
           >
             Configurar fijos
           </a>
         } @else {
           <dl class="mt-3 grid grid-cols-2 gap-3">
-            <div class="rounded-xl bg-muted/60 px-3 py-2">
+            <div class="rounded-menu-item bg-fill-on-card px-3 py-2">
               <dt class="text-xs text-muted-foreground">Gastos pendientes</dt>
-              <dd class="font-semibold tabular-nums text-foreground" data-testid="pending-expense">
+              <dd class="amount text-lg text-expense" data-testid="pending-expense">
                 {{ data.pending_expense_cents | eur }}
               </dd>
             </div>
-            <div class="rounded-xl bg-muted/60 px-3 py-2">
+            <div class="rounded-menu-item bg-fill-on-card px-3 py-2">
               <dt class="text-xs text-muted-foreground">Ingresos pendientes</dt>
-              <dd class="font-semibold tabular-nums text-success-text" data-testid="pending-income">
+              <dd class="amount text-lg text-income" data-testid="pending-income">
                 {{ data.pending_income_cents | eur }}
               </dd>
             </div>
@@ -77,13 +99,13 @@ const PENDING_STATUSES = new Set<ForecastItem['status']>(['upcoming', 'awaiting_
                     </span>
                   </span>
                   <span
-                    class="shrink-0 tabular-nums"
-                    [class]="item.type === 'income' ? 'text-success-text' : 'text-foreground'"
+                    class="amount shrink-0"
+                    [class]="item.type === 'income' ? 'text-income' : 'text-expense'"
                   >
                     @if (item.is_variable) {
-                      <span class="text-xs text-muted-foreground">≈</span>
+                      <span class="text-xs font-normal text-muted-foreground">≈</span>
                     }
-                    {{ item.amount_cents | eur }}
+                    {{ signed(item) | eur: { signed: true } }}
                   </span>
                 </li>
               }
@@ -108,6 +130,10 @@ export class ForecastCard {
 
   protected readonly statusLabel = FORECAST_STATUS_LABELS;
   protected readonly forecast = signal<RecurringForecast | null>(null);
+  protected readonly loading = signal(true);
+  protected readonly failed = signal(false);
+  protected readonly retrying = signal(false);
+  private readonly reloads = signal(0);
   protected readonly pendingItems = computed(() =>
     (this.forecast()?.items ?? []).filter((item) => PENDING_STATUSES.has(item.status)),
   );
@@ -119,16 +145,36 @@ export class ForecastCard {
   });
 
   constructor() {
-    combineLatest([toObservable(this.period), toObservable(this.sheets.changes)])
+    combineLatest([
+      toObservable(this.period),
+      toObservable(this.sheets.changes),
+      toObservable(this.reloads),
+    ])
       .pipe(
+        tap(() => this.loading.set(this.forecast() === null && !this.failed())),
         switchMap(([period]) =>
           (period === undefined ? this.api.forecast() : this.api.forecast(period)).pipe(
-            catchError(() => of(null)),
+            map((forecast) => ({ forecast, failed: false })),
+            catchError(() => of({ forecast: null, failed: true })),
           ),
         ),
         takeUntilDestroyed(),
       )
-      .subscribe((forecast) => this.forecast.set(forecast));
+      .subscribe((result) => {
+        this.forecast.set(result.forecast);
+        this.failed.set(result.failed);
+        this.loading.set(false);
+        this.retrying.set(false);
+      });
+  }
+
+  protected retry(): void {
+    this.retrying.set(true);
+    this.reloads.update((count) => count + 1);
+  }
+
+  protected signed(item: ForecastItem): number {
+    return item.type === 'income' ? item.amount_cents : -item.amount_cents;
   }
 
   protected dueLabel(item: ForecastItem): string {

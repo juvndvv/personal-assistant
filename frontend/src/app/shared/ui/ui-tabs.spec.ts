@@ -33,4 +33,13 @@ describe('UiTabs', () => {
     expect(active()).toBe('expense');
     expect(screen.getByRole('tab', { name: 'Gastos' })).toHaveFocus();
   });
+
+  it('keeps 44 px touch targets', async () => {
+    await setup();
+
+    for (const tab of screen.getAllByRole('tab')) {
+      expect(tab).toHaveClass('min-h-11');
+      expect(tab).not.toHaveClass('min-h-10');
+    }
+  });
 });

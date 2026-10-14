@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { catchError, filter, map, of, switchMap } from 'rxjs';
+import { catchError, combineLatest, filter, map, of, switchMap, tap } from 'rxjs';
 import { CaptureMetrics, PeriodLabel } from '../../core/api/models';
 import { ReportsApi } from '../../core/api/reports.api';
 import {
@@ -10,6 +10,7 @@ import {
   formatDecimal,
   formatSeconds,
 } from '../../shared/charts';
+import { UiAlert, UiCard, UiSkeleton } from '../../shared/ui';
 import { CAPTURE_TARGETS } from './reports-display';
 
 interface MetricTile {
@@ -23,10 +24,11 @@ interface MetricTile {
 
 @Component({
   selector: 'app-capture-quality-panel',
-  imports: [StatTile],
+  imports: [StatTile, UiAlert, UiCard, UiSkeleton],
   template: `
     <section
-      class="rounded-2xl border border-border bg-background p-5"
+      uiCard
+      padding="lg"
       aria-labelledby="capture-quality-heading"
       data-testid="capture-quality"
     >
@@ -34,14 +36,14 @@ interface MetricTile {
         Calidad de captura
       </h2>
       @if (failed()) {
-        <p role="alert" class="mt-2 text-sm text-destructive">
+        <ui-alert class="mt-3" retryable [retrying]="loading()" (retry)="retry()">
           No se pudieron cargar las métricas de captura.
-        </p>
+        </ui-alert>
       } @else if (metrics(); as data) {
         <p class="mt-1 text-xs text-muted-foreground" data-testid="captures-confirmed">
           {{ confirmedLabel() }}
         </p>
-        <div class="mt-3 grid gap-3 sm:grid-cols-3">
+        <div class="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
           @for (tile of tiles(); track tile.key) {
             <app-stat-tile
               [attr.data-testid]="'capture-' + tile.key"
@@ -51,6 +53,21 @@ interface MetricTile {
               [status]="tile.status"
               [statusLabel]="tile.statusLabel"
             />
+          }
+        </div>
+      } @else {
+        <div
+          role="status"
+          aria-live="polite"
+          class="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3"
+        >
+          <span class="sr-only">Cargando métricas de captura</span>
+          @for (tile of placeholders; track tile) {
+            <ui-card variant="tinted" padding="sm" class="px-4">
+              <ui-skeleton width="70%" />
+              <ui-skeleton shape="amount" class="mt-3" />
+              <ui-skeleton width="50%" class="mt-3" />
+            </ui-card>
           }
         </div>
       }
@@ -65,6 +82,9 @@ export class CaptureQualityPanel {
 
   protected readonly metrics = signal<CaptureMetrics | null>(null);
   protected readonly failed = signal(false);
+  protected readonly loading = signal(false);
+  protected readonly placeholders = [0, 1, 2];
+  private readonly retries = signal(0);
 
   protected readonly confirmedLabel = computed(() => {
     const confirmed = this.metrics()?.captures_confirmed ?? 0;
@@ -116,9 +136,11 @@ export class CaptureQualityPanel {
   });
 
   constructor() {
-    toObservable(this.period)
+    combineLatest([toObservable(this.period), toObservable(this.retries)])
       .pipe(
+        map(([period]) => period),
         filter((period): period is PeriodLabel => period !== null),
+        tap(() => this.loading.set(true)),
         switchMap((period) =>
           this.api.captureMetrics(period).pipe(
             map((metrics) => ({ metrics, failed: false })),
@@ -130,7 +152,12 @@ export class CaptureQualityPanel {
       .subscribe(({ metrics, failed }) => {
         this.metrics.set(metrics);
         this.failed.set(failed);
+        this.loading.set(false);
       });
+  }
+
+  protected retry(): void {
+    this.retries.update((count) => count + 1);
   }
 }
 

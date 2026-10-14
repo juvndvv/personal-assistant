@@ -10,18 +10,12 @@ import {
 } from '@angular/core';
 import { hintIdFor } from './field-accessibility';
 import { UiField } from './ui-field';
-import { UiState, nextUiId } from './ui-types';
+import { FIELD_STATE_CLASS, UiState, nextUiId } from './ui-types';
 
 export interface UiComboboxOption {
   value: string;
   label: string;
 }
-
-const STATE_CLASS: Record<UiState, string> = {
-  default: 'border-input focus-visible:border-ring focus-visible:ring-ring/50',
-  warning: 'border-warning focus-visible:ring-warning/30',
-  error: 'border-destructive focus-visible:ring-destructive/20',
-};
 
 @Component({
   selector: 'ui-combobox',
@@ -64,7 +58,7 @@ const STATE_CLASS: Record<UiState, string> = {
           [id]="listId()"
           [attr.aria-label]="label() ?? ariaLabel() ?? null"
           [hidden]="!expanded()"
-          class="absolute inset-x-0 top-full z-50 mt-2 max-h-64 overflow-auto rounded-menu bg-popover p-1.5 text-popover-foreground"
+          class="absolute inset-x-0 top-full z-50 mt-2 max-h-64 overflow-auto rounded-menu bg-menu p-1.5 text-popover-foreground shadow-glass-raised ring-1 ring-border"
         >
           @for (option of options(); track option.value; let index = $index) {
             <li
@@ -123,7 +117,7 @@ export class UiCombobox {
   });
   protected readonly inputClass = computed(
     () =>
-      `h-10 w-full min-w-0 rounded-lg border bg-transparent px-3 text-base outline-none transition-colors duration-150 placeholder:text-subtle-foreground focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm ${STATE_CLASS[this.state()]}`,
+      `h-10 w-full min-w-0 rounded-lg border bg-transparent px-3 text-base outline-none transition-colors duration-150 placeholder:text-muted-foreground focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm ${FIELD_STATE_CLASS[this.state()]}`,
   );
 
   protected optionId(index: number): string {

@@ -5,6 +5,7 @@ export interface DonutSegment {
   label: string;
   value: number;
   slot: SeriesSlot | null;
+  color?: string;
 }
 
 export interface SegmentInput {

@@ -3,16 +3,19 @@ import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { screen, within } from '@testing-library/angular';
 import userEvent from '@testing-library/user-event';
-import { of, throwError } from 'rxjs';
+import { NEVER, of, throwError } from 'rxjs';
+import { AccountsApi } from '../../core/api/accounts.api';
 import { AttachmentsApi } from '../../core/api/attachments.api';
+import { CategoriesApi } from '../../core/api/categories.api';
 import { DraftsApi } from '../../core/api/drafts.api';
-import { NetWorth } from '../../core/api/models';
+import { Category, NetWorth } from '../../core/api/models';
 import { PeriodsApi } from '../../core/api/periods.api';
 import { RecurringApi } from '../../core/api/recurring.api';
 import { ReportsApi } from '../../core/api/reports.api';
 import { TransactionsApi } from '../../core/api/transactions.api';
 import { formatCents } from '../../core/money/format-cents';
 import { aBudgetVsActual } from '../budgets/testing/budget-fixtures';
+import { aCategory } from '../categories/testing/category-fixtures';
 import { quietAttachmentsApi, quietDraftsApi } from '../drafts/testing/draft-fixtures';
 import { aForecast, quietRecurringApi } from '../recurring/testing/recurring-fixtures';
 import { aNetWorth, aNetWorthAccount, aPeriod, aSummary } from '../reports/testing/report-fixtures';
@@ -27,6 +30,8 @@ interface SetupOptions {
   forecast?: ReturnType<typeof aForecast>;
   url?: string;
   pending?: number;
+  recent?: ReturnType<typeof aTransaction>[];
+  categoryTree?: Category[];
 }
 
 async function setup(options: SetupOptions = {}) {
@@ -38,7 +43,13 @@ async function setup(options: SetupOptions = {}) {
     ),
   };
   const transactions = {
-    list: vi.fn(() => of(aPage([aTransaction({ description: 'Pan' }), aTransferLeg()]))),
+    list: vi.fn(() =>
+      of(aPage(options.recent ?? [aTransaction({ description: 'Pan' }), aTransferLeg()])),
+    ),
+  };
+  const tree = options.categoryTree;
+  const categories = {
+    list: vi.fn(() => (tree ? of(tree) : throwError(() => new Error('offline')))),
   };
   const recurring = quietRecurringApi(options.forecast ?? aForecast({ items: [] }));
   const recurringApi = { ...recurring, forecast: vi.fn(recurring.forecast) };
@@ -49,6 +60,8 @@ async function setup(options: SetupOptions = {}) {
       { provide: AttachmentsApi, useValue: quietAttachmentsApi() },
       { provide: ReportsApi, useValue: reports },
       { provide: TransactionsApi, useValue: transactions },
+      { provide: AccountsApi, useValue: { list: () => of([]) } },
+      { provide: CategoriesApi, useValue: categories },
       { provide: PeriodsApi, useValue: { current: () => of(aPeriod('2026-10')) } },
       provideRouter([{ path: '', component: HomePage }]),
     ],
@@ -57,7 +70,15 @@ async function setup(options: SetupOptions = {}) {
   await harness.navigateByUrl(options.url ?? '/', HomePage);
   harness.detectChanges();
   const router = TestBed.inject(Router);
-  return { reports, transactions, recurringApi, harness, router, user: userEvent.setup() };
+  return {
+    reports,
+    transactions,
+    categories,
+    recurringApi,
+    harness,
+    router,
+    user: userEvent.setup(),
+  };
 }
 
 describe('HomePage', () => {
@@ -192,7 +213,7 @@ describe('HomePage', () => {
 
     expect(await screen.findByTestId('pending-drafts')).toHaveTextContent('3');
     const top = screen.getAllByTestId('top-category');
-    expect(top.map((row) => row.textContent?.trim().split(/\s/)[0])).toEqual([
+    expect(screen.getAllByTestId('top-category-name').map((name) => name.textContent)).toEqual([
       'Vivienda',
       'Alimentación',
       'Ocio',
@@ -201,6 +222,62 @@ describe('HomePage', () => {
     expect(transactions.list).toHaveBeenCalledWith({ page: 1, per_page: 10 });
     expect(screen.getByText('Pan')).toBeInTheDocument();
     expect(screen.getByText('BBVA → Ahorro')).toBeInTheDocument();
+  });
+
+  it('tints each top category with its palette colour', async () => {
+    await setup({
+      categoryTree: [aCategory({ id: 20, name: 'Vivienda', icon: 'house', color: '#3566F0' })],
+    });
+
+    await vi.waitFor(() =>
+      expect(
+        within(screen.getAllByTestId('top-category')[0] as HTMLElement).getByTestId('progress-fill')
+          .style.background,
+      ).toBe('var(--category-blue)'),
+    );
+    const [home, food] = screen.getAllByTestId('top-category');
+    expect(home?.querySelector('app-category-icon')?.getAttribute('style')).toContain(
+      '--category-color: var(--category-blue)',
+    );
+    expect(food?.querySelector('app-category-icon')).not.toBeNull();
+    expect(within(food as HTMLElement).getByTestId('progress-fill').style.background).toBe(
+      'var(--viz-series-1)',
+    );
+  });
+
+  it('lays out the cards in reading order without visual reordering', async () => {
+    await setup({ pending: 1 });
+    await screen.findByTestId('pending-drafts');
+
+    const grid = screen.getByTestId('home-grid');
+    const headingOrder = within(grid)
+      .getAllByRole('heading', { level: 2 })
+      .map((heading) => plain(heading.textContent ?? '').trim());
+    const indexOf = (name: string) => headingOrder.indexOf(name);
+    const pendingDraftsPrecedesForecast =
+      screen
+        .getByTestId('pending-drafts')
+        .compareDocumentPosition(screen.getByRole('heading', { name: /Fijos/ })) &
+      Node.DOCUMENT_POSITION_FOLLOWING;
+
+    expect(indexOf('Ingresos y gastos')).toBe(0);
+    expect(indexOf('Patrimonio neto')).toBeLessThan(indexOf('Presupuestos'));
+    expect(pendingDraftsPrecedesForecast).toBeTruthy();
+    expect(indexOf('Presupuestos')).toBeLessThan(indexOf('Dónde más gastas'));
+    expect(indexOf('Dónde más gastas')).toBeLessThan(indexOf('Actividad reciente'));
+    const reorderingClasses = [...grid.querySelectorAll('[class]')]
+      .flatMap((element) => [...element.classList])
+      .filter((token) => /(^|:)(contents|order-.+)$/.test(token));
+    expect(reorderingClasses).toEqual([]);
+  });
+
+  it('requests the reference data once for all recent movements even when it fails', async () => {
+    const { categories, harness } = await setup();
+
+    expect(await screen.findByText('Pan')).toBeInTheDocument();
+    harness.detectChanges();
+
+    expect(categories.list).toHaveBeenCalledTimes(1);
   });
 
   it('shows the recurring items still pending in the selected period', async () => {
@@ -251,5 +328,82 @@ describe('HomePage', () => {
     expect(screen.queryByTestId('period-overview')).not.toBeInTheDocument();
     expect(screen.queryByTestId('home-income')).not.toBeInTheDocument();
     expect(screen.queryByTestId('top-category')).not.toBeInTheDocument();
+  });
+  it('shows a skeleton instead of a blank page while the summary loads', async () => {
+    TestBed.overrideProvider(ReportsApi, {
+      useValue: { summary: () => NEVER, netWorth: () => NEVER },
+    });
+    await setup();
+
+    expect(screen.getByRole('status')).toHaveTextContent('Cargando tu resumen');
+    expect(screen.queryByTestId('net-worth')).not.toBeInTheDocument();
+  });
+
+  it('shows a period skeleton while the period summary loads', async () => {
+    TestBed.overrideProvider(ReportsApi, {
+      useValue: {
+        summary: () => NEVER,
+        netWorth: () => of(aNetWorth()),
+        budgetVsActual: () => of(aBudgetVsActual()),
+      },
+    });
+    await setup();
+
+    expect(await screen.findByTestId('period-overview-loading')).toHaveTextContent(
+      'Cargando resumen del periodo',
+    );
+    expect(screen.getByTestId('net-worth')).toBeInTheDocument();
+  });
+
+  it('retries loading the summary after a failure', async () => {
+    const netWorth = vi
+      .fn()
+      .mockReturnValueOnce(throwError(() => new Error('offline')))
+      .mockReturnValue(of(aNetWorth()));
+    TestBed.overrideProvider(ReportsApi, {
+      useValue: {
+        summary: () => of(aSummary()),
+        netWorth,
+        budgetVsActual: () => of(aBudgetVsActual()),
+      },
+    });
+    const { harness, user } = await setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Reintentar' }));
+    harness.detectChanges();
+
+    expect(await screen.findByTestId('net-worth')).toHaveTextContent(plain(formatCents(1834500)));
+    expect(screen.queryByText('No se pudo cargar tu resumen.', { exact: false })).toBeNull();
+  });
+
+  it('retries the period summary after it fails', async () => {
+    const { reports, harness, user } = await setup();
+    await screen.findByTestId('period-overview');
+    reports.summary.mockReturnValueOnce(throwError(() => new Error('offline')));
+    await user.click(screen.getByRole('button', { name: 'Periodo anterior' }));
+    harness.detectChanges();
+    const failure = await screen.findByTestId('summary-failed');
+
+    await user.click(within(failure).getByRole('button', { name: 'Reintentar' }));
+    harness.detectChanges();
+
+    expect(await screen.findByTestId('period-overview')).toBeInTheDocument();
+    expect(screen.queryByTestId('summary-failed')).not.toBeInTheDocument();
+  });
+
+  it('marks income with a plus sign', async () => {
+    await setup();
+
+    expect(await screen.findByTestId('home-income')).toHaveTextContent(
+      `+${plain(formatCents(210000))}`,
+    );
+  });
+
+  it('invites to add a movement when there is no recent activity', async () => {
+    await setup({ recent: [] });
+
+    const empty = await screen.findByTestId('recent-empty');
+    expect(empty).toHaveTextContent('Aún no has registrado movimientos');
+    expect(within(empty).getByRole('button', { name: 'Añadir movimiento' })).toBeInTheDocument();
   });
 });

@@ -7,15 +7,46 @@ import { AccountsApi } from '../../core/api/accounts.api';
 import { Account } from '../../core/api/models';
 import { EurPipe } from '../../core/money/eur.pipe';
 import { PageHeader } from '../../shared/layout/page-header';
-import { UiBadge, UiButton, UiCheckbox, UiEmptyState } from '../../shared/ui';
-import { groupAccountsByType, isArchived, lastUpdatedLabel } from './account-types';
+import {
+  UiAlert,
+  UiBadge,
+  UiButton,
+  UiCard,
+  UiCheckbox,
+  UiEmptyState,
+  UiSkeletonList,
+} from '../../shared/ui';
+import {
+  balanceToneClass,
+  groupAccountsByType,
+  groupTotalToneClass,
+  isArchived,
+  isCardDebt,
+  lastUpdatedLabel,
+} from './account-types';
 
 @Component({
   selector: 'app-accounts-page',
-  imports: [EurPipe, PageHeader, RouterLink, UiBadge, UiButton, UiCheckbox, UiEmptyState],
+  imports: [
+    EurPipe,
+    PageHeader,
+    RouterLink,
+    UiAlert,
+    UiBadge,
+    UiButton,
+    UiCard,
+    UiCheckbox,
+    UiEmptyState,
+    UiSkeletonList,
+  ],
   providers: [provideIcons({ lucideWallet })],
   template: `
-    <app-page-header title="Cuentas" subtitle="Saldos calculados a partir de tus movimientos." />
+    <app-page-header
+      title="Cuentas"
+      subtitle="Saldos calculados a partir de tus movimientos."
+      backLink="/mas"
+      backLabel="Más"
+    />
 
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
       <ui-checkbox
@@ -29,10 +60,14 @@ import { groupAccountsByType, isArchived, lastUpdatedLabel } from './account-typ
     </div>
 
     @if (loadFailed()) {
-      <p role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-        No se pudieron cargar las cuentas. Inténtalo de nuevo.
-      </p>
-    } @else if (loaded() && accounts().length === 0) {
+      <ui-alert retryable [retrying]="loading()" (retry)="reload()">
+        No se pudieron cargar las cuentas.
+      </ui-alert>
+    } @else if (!loaded()) {
+      <ui-card padding="none">
+        <ui-skeleton-list label="Cargando cuentas" [rows]="4" />
+      </ui-card>
+    } @else if (accounts().length === 0) {
       <ui-empty-state
         title="Aún no tienes cuentas"
         description="Crea tu primera cuenta para empezar a registrar movimientos."
@@ -41,28 +76,23 @@ import { groupAccountsByType, isArchived, lastUpdatedLabel } from './account-typ
         <ui-button (clicked)="createAccount()">Crear mi primera cuenta</ui-button>
       </ui-empty-state>
     } @else {
-      <div class="flex flex-col gap-6">
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
         @for (group of groups(); track group.type) {
           <section [attr.aria-labelledby]="'group-' + group.type">
-            <div class="mb-2 flex items-baseline justify-between px-1">
+            <div class="mb-2 flex items-baseline justify-between gap-3 px-1">
               <h2 [id]="'group-' + group.type" class="text-sm font-semibold text-muted-foreground">
                 {{ group.label }}
               </h2>
-              <span
-                class="text-sm tabular-nums"
-                [class]="group.totalCents < 0 ? 'text-destructive' : 'text-muted-foreground'"
-              >
+              <span class="amount text-sm" [class]="groupTone(group)">
                 {{ group.totalCents | eur }}
               </span>
             </div>
-            <ul
-              class="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-background"
-            >
+            <ul uiCard divided>
               @for (account of group.accounts; track account.id) {
                 <li>
                   <a
                     [routerLink]="['/cuentas', account.id]"
-                    class="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/60"
+                    class="flex min-h-14 items-center justify-between gap-3 px-4 py-3 transition-colors duration-150 hover:bg-hover active:bg-pressed"
                     [attr.data-testid]="'account-row-' + account.id"
                   >
                     <div class="min-w-0">
@@ -77,12 +107,14 @@ import { groupAccountsByType, isArchived, lastUpdatedLabel } from './account-typ
                       </p>
                       <p class="text-xs text-muted-foreground">{{ lastUpdated(account) }}</p>
                     </div>
-                    <span
-                      class="shrink-0 font-semibold tabular-nums"
-                      [class]="account.balance_cents < 0 ? 'text-destructive' : 'text-foreground'"
-                    >
-                      {{ account.balance_cents | eur }}
-                    </span>
+                    <div class="flex shrink-0 flex-col items-end">
+                      <span class="amount text-lg" [class]="balanceTone(account)">
+                        {{ account.balance_cents | eur }}
+                      </span>
+                      @if (cardDebt(account)) {
+                        <span class="text-xs text-muted-foreground">Deuda</span>
+                      }
+                    </div>
                   </a>
                 </li>
               }
@@ -101,9 +133,13 @@ export class AccountsPage {
   protected readonly accounts = signal<Account[]>([]);
   protected readonly includeArchived = signal(false);
   protected readonly loaded = signal(false);
+  protected readonly loading = signal(false);
   protected readonly loadFailed = signal(false);
   protected readonly groups = computed(() => groupAccountsByType(this.accounts()));
   protected readonly archived = isArchived;
+  protected readonly cardDebt = isCardDebt;
+  protected readonly balanceTone = balanceToneClass;
+  protected readonly groupTone = groupTotalToneClass;
 
   constructor() {
     void this.load();
@@ -122,7 +158,12 @@ export class AccountsPage {
     return lastUpdatedLabel(account);
   }
 
+  protected reload(): void {
+    void this.load();
+  }
+
   private async load(): Promise<void> {
+    this.loading.set(true);
     try {
       this.accounts.set(await firstValueFrom(this.api.list(this.includeArchived())));
       this.loadFailed.set(false);
@@ -130,6 +171,7 @@ export class AccountsPage {
       this.loadFailed.set(true);
     } finally {
       this.loaded.set(true);
+      this.loading.set(false);
     }
   }
 }

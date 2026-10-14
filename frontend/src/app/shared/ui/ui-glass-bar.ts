@@ -29,7 +29,9 @@ const POSITION_CLASS: Record<UiGlassBarPosition, { sticky: string; edge: string 
     <div
       class="mx-auto flex w-full items-center gap-2"
       [class]="
-        floating() ? 'min-h-14 px-3 py-2' : 'min-h-[var(--top-bar-height)] px-4 py-2 md:px-8'
+        floating()
+          ? 'min-h-14 px-3 py-2'
+          : 'min-h-[var(--top-bar-height)] px-4 py-(--bar-padding-block) md:px-8'
       "
     >
       <ng-content />

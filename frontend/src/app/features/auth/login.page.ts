@@ -2,35 +2,26 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, signal } f
 import { Router } from '@angular/router';
 import { AuthStore } from '../../core/auth/auth.store';
 import { safeReturnUrl } from '../../core/auth/login-url';
-import { UiButton, UiCheckbox, UiInput } from '../../shared/ui';
+import { UiAlert, UiButton, UiCard, UiCheckbox, UiInput } from '../../shared/ui';
 import { describeLoginFailure } from './login-error';
 
 @Component({
   selector: 'app-login-page',
-  imports: [UiButton, UiCheckbox, UiInput],
-  host: { class: 'block min-h-dvh bg-muted/40' },
+  imports: [UiAlert, UiButton, UiCard, UiCheckbox, UiInput],
+  host: { class: 'block min-h-dvh bg-grouped' },
   template: `
     <main class="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6 py-12">
       <header class="mb-8 text-center">
-        <p class="text-sm font-semibold tracking-wide text-primary-text">Finanzas</p>
+        <p class="text-sm font-semibold tracking-wide text-muted-foreground">Finanzas</p>
         <h1 class="mt-2 text-2xl font-semibold text-foreground">Inicia sesión</h1>
         <p class="mt-1 text-sm text-muted-foreground">
           Accede para registrar y revisar tus movimientos.
         </p>
       </header>
 
-      <form
-        class="flex flex-col gap-5 rounded-2xl border border-border bg-background p-6 shadow-xs"
-        novalidate
-        (submit)="submit($event)"
-      >
+      <form uiCard padding="lg" class="flex flex-col gap-5" novalidate (submit)="submit($event)">
         @if (failure(); as message) {
-          <p
-            role="alert"
-            class="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          >
-            {{ message }}
-          </p>
+          <ui-alert>{{ message }}</ui-alert>
         }
 
         <ui-input

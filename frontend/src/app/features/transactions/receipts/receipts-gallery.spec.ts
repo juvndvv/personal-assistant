@@ -44,6 +44,34 @@ async function setup() {
 }
 
 describe('ReceiptsGallery', () => {
+  it('offers a retry when the receipts fail to load', async () => {
+    const api = {
+      listForTransaction: vi
+        .fn()
+        .mockReturnValueOnce(throwError(() => new Error('offline')))
+        .mockReturnValue(of([PHOTO])),
+      addToTransaction: vi.fn(),
+      delete: vi.fn(),
+    };
+    await render(ReceiptsGallery, {
+      providers: [
+        { provide: AttachmentsApi, useValue: api },
+        { provide: ImageCompressor, useValue: { compress: vi.fn() } },
+        { provide: UiToast, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn() } },
+      ],
+      inputs: { transactionId: 120 },
+    });
+    const user = userEvent.setup();
+
+    const alert = await screen.findByTestId('receipts-load-failure');
+    expect(alert).toHaveTextContent('No se pudieron cargar los justificantes.');
+    await user.click(within(alert).getByRole('button', { name: 'Reintentar' }));
+
+    expect(await screen.findAllByTestId('receipt')).toHaveLength(1);
+    expect(screen.queryByTestId('receipts-load-failure')).not.toBeInTheDocument();
+    expect(api.listForTransaction).toHaveBeenCalledTimes(2);
+  });
+
   it('lists receipts with an image preview, an audio player and download links', async () => {
     const { api } = await setup();
 

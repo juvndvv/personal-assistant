@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { render, screen, within } from '@testing-library/angular';
-import { of, throwError } from 'rxjs';
+import userEvent from '@testing-library/user-event';
+import { Subject, of, throwError } from 'rxjs';
 import { RecurringForecast } from '../../core/api/models';
 import { RecurringApi } from '../../core/api/recurring.api';
 import { MovementSheets } from '../transactions/movement-sheets';
@@ -115,14 +116,23 @@ describe('ForecastCard', () => {
     );
   });
 
-  it('stays out of the way when the forecast cannot be loaded', async () => {
-    await setup(() => throwError(() => new Error('offline')));
+  it('offers a retry when the forecast cannot be loaded', async () => {
+    const { api, view } = await setup(() => throwError(() => new Error('offline')));
+    const user = userEvent.setup();
 
-    await vi.waitFor(() =>
-      expect(
-        screen.queryByRole('region', { name: 'Fijos pendientes este periodo' }),
-      ).not.toBeInTheDocument(),
+    const card = await screen.findByRole('region', { name: 'Fijos pendientes este periodo' });
+    expect(await within(card).findByRole('alert')).toHaveTextContent(
+      'No se pudieron cargar los fijos pendientes.',
     );
+    expect(within(card).queryAllByTestId('forecast-item')).toHaveLength(0);
+
+    api.forecast.mockReturnValue(of(octoberForecast()));
+    await user.click(within(card).getByRole('button', { name: 'Reintentar' }));
+    view.detectChanges();
+
+    expect(await screen.findAllByTestId('forecast-item')).toHaveLength(2);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(api.forecast).toHaveBeenCalledTimes(2);
   });
 
   it('reloads when a movement changes elsewhere', async () => {
@@ -158,5 +168,18 @@ describe('ForecastCard', () => {
     expect(screen.getByTestId('posted-totals')).toHaveTextContent(
       'Ya registrados: 64,37 € en gastos y 0,00 € en ingresos',
     );
+  });
+
+  it('shows a skeleton until the forecast arrives', async () => {
+    const pending = new Subject<RecurringForecast>();
+    await setup(() => pending);
+
+    expect(screen.getByTestId('forecast-loading')).toBeInTheDocument();
+
+    pending.next(octoberForecast());
+    pending.complete();
+
+    expect(await screen.findByTestId('recurring-forecast')).toBeInTheDocument();
+    expect(screen.queryByTestId('forecast-loading')).not.toBeInTheDocument();
   });
 });

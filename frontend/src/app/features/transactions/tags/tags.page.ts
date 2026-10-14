@@ -1,16 +1,18 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { conflictCode, serverMessage, validationErrors } from '../../../core/api/api-error';
 import { Tag } from '../../../core/api/models';
 import { TagsApi } from '../../../core/api/tags.api';
 import { PageHeader } from '../../../shared/layout/page-header';
 import {
+  UiAlert,
   UiButton,
+  UiCard,
   UiDialog,
   UiDialogFooter,
   UiEmptyState,
   UiInput,
+  UiSkeletonList,
   UiToast,
 } from '../../../shared/ui';
 import { MAX_TAG_LENGTH, normalizeTagName } from '../tag-input/tag-names';
@@ -19,36 +21,44 @@ export const TAG_NAME_TAKEN_MESSAGE = 'Ya existe una etiqueta con ese nombre.';
 
 @Component({
   selector: 'app-tags-page',
-  imports: [PageHeader, RouterLink, UiButton, UiDialog, UiDialogFooter, UiEmptyState, UiInput],
+  imports: [
+    PageHeader,
+    UiAlert,
+    UiButton,
+    UiCard,
+    UiDialog,
+    UiDialogFooter,
+    UiEmptyState,
+    UiInput,
+    UiSkeletonList,
+  ],
   template: `
-    <a
-      routerLink="/mas"
-      class="mb-4 inline-flex min-w-11 items-center text-sm text-primary-text hover:underline"
-      >← Más</a
-    >
     <app-page-header
       title="Etiquetas"
       subtitle="Las etiquetas agrupan movimientos de distintas categorías, por ejemplo un viaje."
+      backLink="/mas"
+      backLabel="Más"
     />
     @if (loadFailed()) {
-      <p role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <ui-alert retryable [retrying]="loading()" (retry)="reload()">
         No se pudieron cargar las etiquetas.
-      </p>
-    } @else if (loaded() && tags().length === 0) {
+      </ui-alert>
+    } @else if (!loaded()) {
+      <ui-card padding="none">
+        <ui-skeleton-list label="Cargando etiquetas" [rows]="4" />
+      </ui-card>
+    } @else if (tags().length === 0) {
       <ui-empty-state
         title="Aún no tienes etiquetas"
         description="Añade etiquetas desde «Más detalles» al registrar un movimiento."
       />
     } @else {
-      <ul
-        class="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-background"
-        aria-label="Etiquetas"
-      >
+      <ul uiCard divided aria-label="Etiquetas">
         @for (tag of tags(); track tag.id) {
           <li class="flex items-center gap-3 px-4 py-3">
             <span class="min-w-0 flex-1">
               <span class="block truncate font-medium text-foreground">{{ tag.name }}</span>
-              <span class="block text-xs text-muted-foreground">{{ usage(tag) }}</span>
+              <span class="block text-sm text-muted-foreground">{{ usage(tag) }}</span>
             </span>
             <ui-button
               variant="ghost"
@@ -116,6 +126,7 @@ export class TagsPage {
   protected readonly tags = signal<Tag[]>([]);
   protected readonly loaded = signal(false);
   protected readonly loadFailed = signal(false);
+  protected readonly loading = signal(false);
   protected readonly busy = signal(false);
   protected readonly renameTarget = signal<Tag | null>(null);
   protected readonly deleteTarget = signal<Tag | null>(null);
@@ -195,12 +206,20 @@ export class TagsPage {
     }
   }
 
+  protected reload(): void {
+    void this.load();
+  }
+
   private async load(): Promise<void> {
+    this.loading.set(true);
     try {
       this.tags.set(await firstValueFrom(this.api.list()));
+      this.loadFailed.set(false);
       this.loaded.set(true);
     } catch {
       this.loadFailed.set(true);
+    } finally {
+      this.loading.set(false);
     }
   }
 }

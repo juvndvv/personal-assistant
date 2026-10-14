@@ -16,36 +16,46 @@ import { firstValueFrom } from 'rxjs';
 import { conflictCode, serverMessage, validationErrors } from '../../../core/api/api-error';
 import { AttachmentsApi } from '../../../core/api/attachments.api';
 import { Attachment } from '../../../core/api/models';
-import { UiButton, UiToast } from '../../../shared/ui';
+import { UiAlert, UiButton, UiCard, UiSkeleton, UiToast } from '../../../shared/ui';
 import { MovementSheets } from '../movement-sheets';
 import { ReceiptUpload } from './receipt-upload';
 
 @Component({
   selector: 'app-receipts-gallery',
-  imports: [NgIcon, UiButton],
+  imports: [NgIcon, UiAlert, UiButton, UiCard, UiSkeleton],
   providers: [provideIcons({ lucideDownload, lucidePaperclip, lucideTrash2 })],
   template: `
     <section class="flex flex-col gap-3" aria-labelledby="receipts-heading">
       <h3 id="receipts-heading" class="text-sm font-medium text-foreground">Justificantes</h3>
+      @if (loadFailure(); as message) {
+        <ui-alert
+          retryable
+          [retrying]="loading()"
+          (retry)="load(transactionId())"
+          data-testid="receipts-load-failure"
+          >{{ message }}</ui-alert
+        >
+      }
       @if (failure(); as message) {
-        <p role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {{ message }}
-        </p>
+        <ui-alert>{{ message }}</ui-alert>
       }
       @if (loading()) {
-        <p class="text-sm text-muted-foreground">Cargando justificantes…</p>
+        <div role="status" aria-live="polite">
+          <span class="sr-only">Cargando justificantes</span>
+          <ui-skeleton shape="block" height="5rem" />
+        </div>
       } @else if (receipts().length === 0) {
         <p class="text-sm text-muted-foreground">Este movimiento no tiene justificantes.</p>
       }
       <ul class="flex flex-col gap-3" data-testid="receipts">
         @for (receipt of receipts(); track receipt.id) {
-          <li class="flex flex-col gap-2 rounded-xl border border-border p-3" data-testid="receipt">
+          <li uiCard padding="sm" class="flex flex-col gap-2" data-testid="receipt">
             @if (receipt.kind === 'image') {
               <a [href]="receipt.url" target="_blank" rel="noopener">
                 <img
                   [src]="receipt.url"
                   [alt]="'Justificante ' + (receipt.original_name ?? '')"
-                  class="max-h-56 w-full rounded-lg bg-muted object-contain"
+                  class="max-h-56 w-full rounded-sm bg-muted object-contain"
                   loading="lazy"
                 />
               </a>
@@ -61,14 +71,14 @@ import { ReceiptUpload } from './receipt-upload';
               <a
                 [href]="receipt.download_url"
                 [attr.download]="receipt.original_name ?? ''"
-                class="inline-flex items-center gap-1 rounded-lg px-2 py-1 font-medium text-primary-text hover:bg-muted"
+                class="inline-flex min-h-11 items-center gap-1 rounded-capsule px-3 font-medium text-link transition-colors duration-150 hover:bg-hover"
               >
                 <ng-icon name="lucideDownload" size="16" aria-hidden="true" />
                 Descargar
               </a>
               <button
                 type="button"
-                class="inline-flex size-8 items-center justify-center rounded-lg text-destructive hover:bg-muted"
+                class="inline-flex size-11 items-center justify-center rounded-capsule text-danger-text transition-colors duration-150 hover:bg-hover disabled:opacity-50"
                 aria-label="Eliminar justificante"
                 [disabled]="busy()"
                 (click)="remove(receipt)"
@@ -111,6 +121,7 @@ export class ReceiptsGallery {
   protected readonly uploading = signal(false);
   protected readonly deleting = signal(false);
   protected readonly failure = signal<string | null>(null);
+  protected readonly loadFailure = signal<string | null>(null);
   protected readonly busy = computed(() => this.uploading() || this.deleting());
 
   constructor() {
@@ -171,9 +182,10 @@ export class ReceiptsGallery {
     }
   }
 
-  private async load(transactionId: number | null): Promise<void> {
+  protected async load(transactionId: number | null): Promise<void> {
     this.receipts.set([]);
     this.failure.set(null);
+    this.loadFailure.set(null);
     if (transactionId === null) {
       return;
     }
@@ -184,7 +196,7 @@ export class ReceiptsGallery {
         this.receipts.set(receipts);
       }
     } catch (error: unknown) {
-      this.failure.set(serverMessage(error) ?? 'No se pudieron cargar los justificantes.');
+      this.loadFailure.set(serverMessage(error) ?? 'No se pudieron cargar los justificantes.');
     } finally {
       this.loading.set(false);
     }

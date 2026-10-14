@@ -10,11 +10,15 @@ import { formatDate } from '../../core/date/iso-date';
 import { EurPipe } from '../../core/money/eur.pipe';
 import { PageHeader } from '../../shared/layout/page-header';
 import {
+  UiAlert,
   UiBadge,
   UiButton,
+  UiButtonLink,
+  UiCard,
   UiDialog,
   UiDialogFooter,
   UiEmptyState,
+  UiSkeletonList,
   UiToast,
 } from '../../shared/ui';
 import { isPaused, scheduleSummary } from './recurring-display';
@@ -25,68 +29,62 @@ import { isPaused, scheduleSummary } from './recurring-display';
     EurPipe,
     PageHeader,
     RouterLink,
+    UiAlert,
     UiBadge,
     UiButton,
+    UiButtonLink,
+    UiCard,
     UiDialog,
     UiDialogFooter,
     UiEmptyState,
+    UiSkeletonList,
   ],
   providers: [provideIcons({ lucideRepeat })],
   template: `
-    <a
-      routerLink="/mas"
-      class="mb-4 inline-flex min-w-11 items-center text-sm text-primary-text hover:underline"
-      >← Más</a
-    >
     <app-page-header
       title="Fijos"
       subtitle="Ingresos y gastos que se repiten. Se registran solos en su fecha."
-    />
-    <div class="mb-6 flex justify-end">
-      <a
-        routerLink="/mas/fijos/nuevo"
-        class="inline-flex h-10 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-      >
-        Nuevo fijo
-      </a>
-    </div>
+      backLink="/mas"
+      backLabel="Más"
+    >
+      <a pageHeaderActions routerLink="/mas/fijos/nuevo" uiButtonLink> Nuevo fijo </a>
+    </app-page-header>
 
-    @if (failure(); as message) {
-      <p role="alert" class="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-        {{ message }}
-      </p>
+    @if (loadFailed()) {
+      <ui-alert class="mb-4" retryable [retrying]="loading()" (retry)="reload()">
+        {{ loadFailed() }}
+      </ui-alert>
+    } @else if (failure(); as message) {
+      <ui-alert class="mb-4">{{ message }}</ui-alert>
     }
 
-    @if (loaded() && templates().length === 0) {
+    @if (!loaded()) {
+      <ui-card padding="none">
+        <ui-skeleton-list label="Cargando fijos" [rows]="4" />
+      </ui-card>
+    } @else if (templates().length === 0 && !loadFailed()) {
       <ui-empty-state
         title="Aún no tienes fijos"
         description="Añade tu nómina, el alquiler o las facturas para que se registren solos cada mes."
         icon="lucideRepeat"
       >
-        <a
-          routerLink="/mas/fijos/nuevo"
-          class="text-sm font-medium text-primary-text hover:underline"
-        >
+        <a routerLink="/mas/fijos/nuevo" class="text-sm font-medium text-link hover:underline">
           Nuevo fijo
         </a>
       </ui-empty-state>
-    } @else {
-      <ul
-        class="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-background"
-        aria-label="Fijos"
-      >
+    } @else if (templates().length > 0) {
+      <ul uiCard divided aria-label="Fijos">
         @for (template of templates(); track template.id) {
-          <li
-            class="flex flex-wrap items-center gap-3 px-4 py-3"
-            data-testid="recurring-row"
-            [class.opacity-70]="paused(template)"
-          >
+          <li class="flex flex-wrap items-center gap-3 px-4 py-3" data-testid="recurring-row">
             <a
               [routerLink]="['/mas/fijos', template.id]"
-              class="min-w-0 flex-1"
+              class="min-w-0 flex-1 rounded-menu-item"
               [attr.aria-label]="'Editar ' + template.name"
             >
-              <span class="flex flex-wrap items-center gap-2 font-medium text-foreground">
+              <span
+                class="flex flex-wrap items-center gap-2 font-medium"
+                [class]="paused(template) ? 'text-muted-foreground' : 'text-foreground'"
+              >
                 <span class="truncate">{{ template.name }}</span>
                 @if (template.is_variable) {
                   <ui-badge tone="info">Variable</ui-badge>
@@ -99,8 +97,9 @@ import { isPaused, scheduleSummary } from './recurring-display';
               <span class="block text-xs text-muted-foreground">{{ nextDue(template) }}</span>
             </a>
             <span
-              class="shrink-0 font-semibold tabular-nums"
-              [class]="template.type === 'income' ? 'text-success-text' : 'text-foreground'"
+              class="amount shrink-0 text-lg"
+              [class]="amountTone(template)"
+              data-testid="recurring-amount"
             >
               {{ signedAmount(template) | eur: { signed: true } }}
             </span>
@@ -138,9 +137,6 @@ import { isPaused, scheduleSummary } from './recurring-display';
           </li>
         }
       </ul>
-      @if (!loaded()) {
-        <p class="mt-4 text-sm text-muted-foreground" role="status">Cargando fijos…</p>
-      }
     }
 
     <ui-dialog
@@ -164,6 +160,8 @@ export class RecurringPage {
   protected readonly templates = signal<RecurringTemplate[]>([]);
   protected readonly loaded = signal(false);
   protected readonly failure = signal<string | null>(null);
+  protected readonly loadFailed = signal<string | null>(null);
+  protected readonly loading = signal(false);
   protected readonly busyId = signal<number | null>(null);
   protected readonly deleting = signal(false);
   protected readonly deleteTarget = signal<RecurringTemplate | null>(null);
@@ -183,6 +181,17 @@ export class RecurringPage {
     return template.next_due_date === null
       ? 'Sin próximas fechas'
       : `Próximo: ${formatDate(template.next_due_date, 'medium')}`;
+  }
+
+  protected amountTone(template: RecurringTemplate): string {
+    if (isPaused(template)) {
+      return 'text-muted-foreground';
+    }
+    return template.type === 'income' ? 'text-income' : 'text-expense';
+  }
+
+  protected reload(): void {
+    void this.load();
   }
 
   protected signedAmount(template: RecurringTemplate): number {
@@ -241,12 +250,15 @@ export class RecurringPage {
   }
 
   private async load(): Promise<void> {
+    this.loading.set(true);
     try {
       this.templates.set(await firstValueFrom(this.api.list(true)));
+      this.loadFailed.set(null);
     } catch (error: unknown) {
-      this.failure.set(serverMessage(error) ?? 'No se pudieron cargar los fijos.');
+      this.loadFailed.set(serverMessage(error) ?? 'No se pudieron cargar los fijos.');
     } finally {
       this.loaded.set(true);
+      this.loading.set(false);
     }
   }
 }

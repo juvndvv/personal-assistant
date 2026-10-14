@@ -1,16 +1,22 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { render, screen, within } from '@testing-library/angular';
-import { of, throwError } from 'rxjs';
+import userEvent from '@testing-library/user-event';
+import { NEVER, of, throwError } from 'rxjs';
 import { ReportsApi } from '../../core/api/reports.api';
 import { MovementSheets } from '../transactions/movement-sheets';
+import { referenceDataProviders } from '../transactions/testing/reference-fakes';
 import { BudgetCard } from './budget-card';
 import { aBudgetVsActual, anEmptyBudgetVsActual } from './testing/budget-fixtures';
 
 async function setup(report: () => ReturnType<ReportsApi['budgetVsActual']>) {
   const reports = { budgetVsActual: vi.fn(report) };
   const view = await render(BudgetCard, {
-    providers: [provideRouter([]), { provide: ReportsApi, useValue: reports }],
+    providers: [
+      provideRouter([]),
+      { provide: ReportsApi, useValue: reports },
+      ...referenceDataProviders(),
+    ],
     inputs: { period: '2026-10' },
   });
   return { reports, view };
@@ -46,11 +52,29 @@ describe('BudgetCard', () => {
     );
   });
 
-  it('stays out of the way when the report cannot be loaded', async () => {
-    const { reports } = await setup(() => throwError(() => new Error('offline')));
+  it('shows a skeleton while the report loads', async () => {
+    await setup(() => NEVER);
 
-    await vi.waitFor(() => expect(reports.budgetVsActual).toHaveBeenCalled());
-    expect(screen.queryByRole('region', { name: 'Presupuestos' })).not.toBeInTheDocument();
+    const card = await screen.findByRole('region', { name: 'Presupuestos' });
+    expect(within(card).getByRole('status')).toHaveTextContent('Cargando presupuestos');
+    expect(within(card).queryAllByTestId('budget-row')).toHaveLength(0);
+  });
+
+  it('offers a retry when the report cannot be loaded', async () => {
+    const { reports, view } = await setup(() => throwError(() => new Error('offline')));
+    const user = userEvent.setup();
+
+    const card = await screen.findByRole('region', { name: 'Presupuestos' });
+    expect(await within(card).findByRole('alert')).toHaveTextContent(
+      'No se pudieron cargar los presupuestos.',
+    );
+
+    reports.budgetVsActual.mockReturnValue(of(aBudgetVsActual()));
+    await user.click(within(card).getByRole('button', { name: 'Reintentar' }));
+    view.detectChanges();
+
+    expect(await within(card).findAllByTestId('budget-row')).toHaveLength(3);
+    expect(within(card).queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('reloads when a movement changes elsewhere', async () => {

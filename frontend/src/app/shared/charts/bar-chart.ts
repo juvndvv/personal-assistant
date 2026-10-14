@@ -57,7 +57,7 @@ interface OverlayPoint {
                 [attr.width]="band.width"
                 [attr.height]="plotHeight()"
                 rx="6"
-                class="fill-muted"
+                class="fill-fill-strong"
                 data-testid="selected-band"
               />
             }

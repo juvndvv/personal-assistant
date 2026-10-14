@@ -1,6 +1,7 @@
 export { UiAlert, type UiAlertTone } from './ui-alert';
 export { UiBadge, type UiBadgeTone, type UiBadgeVariant } from './ui-badge';
 export { UiButton, type UiButtonSize, type UiButtonVariant } from './ui-button';
+export { UiButtonLink, type UiButtonLinkSize, type UiButtonLinkVariant } from './ui-button-link';
 export { UiCard, type UiCardPadding, type UiCardVariant } from './ui-card';
 export { UiCheckbox } from './ui-checkbox';
 export { UiCombobox, type UiComboboxOption } from './ui-combobox';

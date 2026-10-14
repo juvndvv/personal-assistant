@@ -7,15 +7,32 @@ import {
   input,
   signal,
 } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { firstValueFrom, skip } from 'rxjs';
 import { AccountsApi } from '../../core/api/accounts.api';
 import { conflictCode, serverMessage } from '../../core/api/api-error';
 import { Account, TransactionListQuery } from '../../core/api/models';
 import { EurPipe } from '../../core/money/eur.pipe';
-import { UiBadge, UiButton, UiDialog, UiDialogFooter, UiToast } from '../../shared/ui';
-import { ACCOUNT_TYPE_LABELS, isArchived, lastUpdatedLabel } from './account-types';
+import { PageHeader } from '../../shared/layout/page-header';
+import {
+  UiAlert,
+  UiBadge,
+  UiButton,
+  UiCard,
+  UiDialog,
+  UiDialogFooter,
+  UiSkeleton,
+  UiToast,
+} from '../../shared/ui';
+import {
+  ACCOUNT_TYPE_LABELS,
+  balanceLabel,
+  balanceToneClass,
+  isArchived,
+  isOverdrawn,
+  lastUpdatedLabel,
+} from './account-types';
 import { TransactionFeed } from '../transactions/list/transaction-feed';
 import { MovementSheets } from '../transactions/movement-sheets';
 import { AdjustBalanceSheet } from './adjust-balance-sheet';
@@ -29,64 +46,83 @@ const HAS_MOVEMENTS_MESSAGE =
   imports: [
     AdjustBalanceSheet,
     EurPipe,
-    RouterLink,
+    PageHeader,
     SettleCardSheet,
     TransactionFeed,
+    UiAlert,
     UiBadge,
     UiButton,
+    UiCard,
     UiDialog,
     UiDialogFooter,
+    UiSkeleton,
   ],
   template: `
-    <a routerLink="/cuentas" class="mb-4 inline-block text-sm text-primary-text hover:underline">
-      ← Cuentas
-    </a>
+    <app-page-header
+      [title]="account()?.name ?? 'Cuenta'"
+      [subtitle]="typeLabel()"
+      backLink="/cuentas"
+      backLabel="Cuentas"
+    />
 
     @if (loadFailed()) {
-      <p role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <ui-alert class="mb-6" retryable [retrying]="loading()" (retry)="reload()">
         No se pudo cargar la cuenta.
-      </p>
+      </ui-alert>
+    } @else if (account() === null) {
+      <ui-card class="mb-6" padding="lg">
+        <div role="status" aria-live="polite">
+          <span class="sr-only">Cargando cuenta</span>
+          <ui-skeleton width="4rem" />
+          <ui-skeleton shape="amount" class="mt-3" width="10rem" />
+          <ui-skeleton class="mt-3" width="40%" />
+          <div class="mt-5 flex flex-wrap gap-2">
+            <ui-skeleton shape="pill" width="8rem" />
+            <ui-skeleton shape="pill" />
+            <ui-skeleton shape="pill" />
+          </div>
+        </div>
+      </ui-card>
     }
 
     @if (account(); as current) {
-      <header class="mb-6">
-        <p class="text-sm text-muted-foreground">{{ typeLabel() }}</p>
-        <h1 class="flex flex-wrap items-center gap-2 text-2xl font-semibold text-foreground">
-          {{ current.name }}
+      @if (archived() || current.stale) {
+        <div class="-mt-3 mb-4 flex flex-wrap gap-2" data-testid="account-status">
           @if (archived()) {
             <ui-badge tone="neutral">Archivada</ui-badge>
           }
           @if (current.stale) {
             <ui-badge tone="warning">Desactualizada</ui-badge>
           }
-        </h1>
-      </header>
+        </div>
+      }
 
-      <section class="mb-6 rounded-2xl border border-border bg-background p-5">
-        <p class="text-sm text-muted-foreground">Saldo</p>
-        <p
-          class="mt-1 text-3xl font-semibold tabular-nums"
-          [class]="current.balance_cents < 0 ? 'text-destructive' : 'text-foreground'"
-          data-testid="account-balance"
-        >
+      <section uiCard padding="lg" class="mb-6" aria-label="Saldo de la cuenta">
+        <p class="text-sm text-muted-foreground">{{ balanceLabel() }}</p>
+        <p class="amount mt-1 text-4xl" [class]="balanceTone()" data-testid="account-balance">
           {{ current.balance_cents | eur }}
         </p>
         <p class="mt-1 text-sm text-muted-foreground">{{ updatedLabel() }}</p>
+        @if (overdrawn()) {
+          <p class="mt-2 text-sm text-danger-text">La cuenta está en descubierto.</p>
+        }
         @if (current.stale) {
-          <p class="mt-2 text-sm text-warning">
+          <ui-alert tone="warning" class="mt-4">
             Hace más de 30 días que no actualizas esta cuenta. Ajusta el saldo para mantenerla al
             día.
-          </p>
+          </ui-alert>
         }
         @if (current.type === 'credit_card') {
-          <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+          <dl class="mt-4 grid grid-cols-2 gap-3 rounded-menu-item bg-fill-on-card p-3 text-sm">
             <div>
               <dt class="text-muted-foreground">Día de corte</dt>
-              <dd class="text-foreground">{{ current.statement_day ?? 'Sin día de corte' }}</dd>
+              <dd class="font-medium text-foreground">
+                {{ current.statement_day ?? 'Sin día de corte' }}
+              </dd>
             </div>
             <div>
               <dt class="text-muted-foreground">Cuenta de pago</dt>
-              <dd class="text-foreground">{{ settlementName() }}</dd>
+              <dd class="font-medium text-foreground">{{ settlementName() }}</dd>
             </div>
           </dl>
         }
@@ -150,9 +186,7 @@ const HAS_MOVEMENTS_MESSAGE =
         [description]="'¿Seguro que quieres eliminar ' + current.name + '?'"
       >
         @if (deleteError(); as message) {
-          <p role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {{ message }}
-          </p>
+          <ui-alert>{{ message }}</ui-alert>
         }
         <div uiDialogFooter class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <ui-button variant="outline" (clicked)="deleteOpen.set(false)">Cancelar</ui-button>
@@ -179,6 +213,7 @@ export class AccountDetailPage implements OnInit {
   protected readonly account = signal<Account | null>(null);
   protected readonly settlementName = signal('Sin cuenta de pago');
   protected readonly loadFailed = signal(false);
+  protected readonly loading = signal(false);
   protected readonly busy = signal(false);
   protected readonly sheets = inject(MovementSheets);
   protected readonly adjustOpen = signal(false);
@@ -198,6 +233,18 @@ export class AccountDetailPage implements OnInit {
     const account = this.account();
     return account === null ? '' : ACCOUNT_TYPE_LABELS[account.type];
   });
+  protected readonly balanceLabel = computed(() => {
+    const account = this.account();
+    return account === null ? 'Saldo' : balanceLabel(account);
+  });
+  protected readonly balanceTone = computed(() => {
+    const account = this.account();
+    return account === null ? 'text-foreground' : balanceToneClass(account);
+  });
+  protected readonly overdrawn = computed(() => {
+    const account = this.account();
+    return account !== null && isOverdrawn(account);
+  });
   protected readonly updatedLabel = computed(() => {
     const account = this.account();
     return account === null ? '' : lastUpdatedLabel(account);
@@ -214,6 +261,7 @@ export class AccountDetailPage implements OnInit {
   }
 
   async reload(): Promise<void> {
+    this.loading.set(true);
     try {
       const account = await firstValueFrom(this.api.get(Number(this.id())));
       this.account.set(account);
@@ -221,6 +269,8 @@ export class AccountDetailPage implements OnInit {
       await this.loadSettlementName(account);
     } catch {
       this.loadFailed.set(true);
+    } finally {
+      this.loading.set(false);
     }
   }
 

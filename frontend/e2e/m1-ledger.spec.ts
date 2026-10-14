@@ -75,7 +75,8 @@ test.describe('M1 ledger journey', () => {
     }
     const cardRow = page.getByRole('link', { name: new RegExp(card) });
     await expect(cardRow).toContainText('-120,00 €');
-    await expect(cardRow.getByText('-120,00 €')).toHaveClass(/text-destructive/);
+    await expect(cardRow.getByText('-120,00 €')).toHaveClass(/text-foreground/);
+    await expect(cardRow).toContainText('Deuda');
     await expect(page.getByRole('link', { name: new RegExp(cash) })).toContainText('80,50 €');
   });
 
@@ -102,7 +103,7 @@ test.describe('M1 ledger journey', () => {
     await createAccount(page, { name, type: 'cash', openingBalance: '0' });
 
     await page.getByRole('button', { name: 'Archivar', exact: true }).click();
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Archivada');
+    await expect(page.getByTestId('account-status')).toContainText('Archivada');
 
     await page.goto('/cuentas');
     await expect(page.getByRole('link', { name: new RegExp(name) })).toHaveCount(0);

@@ -14,7 +14,10 @@ import { firstValueFrom } from 'rxjs';
 import { serverMessage, validationErrors } from '../../core/api/api-error';
 import { CategoriesApi } from '../../core/api/categories.api';
 import { Category, CategoryKind } from '../../core/api/models';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideBan, lucideCheck } from '@ng-icons/lucide';
 import {
+  UiAlert,
   UiButton,
   UiInput,
   UiSelect,
@@ -22,11 +25,32 @@ import {
   UiSheet,
   UiSheetFooter,
 } from '../../shared/ui';
-import { CATEGORY_COLORS, CATEGORY_ICONS, categoryColorKey } from './category-appearance';
+import {
+  CATEGORY_COLORS,
+  CATEGORY_ICONS,
+  CategoryColorKey,
+  categoryColorKey,
+  categoryColorValue,
+} from './category-appearance';
 import { CategoryIcon } from './category-icon';
 
 const NAME_MAX_LENGTH = 60;
 const KIND_LABELS: Record<CategoryKind, string> = { expense: 'Gasto', income: 'Ingreso' };
+const NO_COLOUR_LABEL = 'Sin color';
+
+interface ColourChoice {
+  id: string;
+  key: CategoryColorKey | null;
+  label: string;
+}
+
+const COLOUR_CHOICES: readonly ColourChoice[] = [
+  { id: 'none', key: null, label: NO_COLOUR_LABEL },
+  ...CATEGORY_COLORS.map((option) => ({ id: option.key, key: option.key, label: option.label })),
+];
+
+const NEXT_KEYS = new Set(['ArrowRight', 'ArrowDown']);
+const PREVIOUS_KEYS = new Set(['ArrowLeft', 'ArrowUp']);
 
 export type CategoryEditorTarget =
   | { mode: 'create'; kind: CategoryKind; parent: Category | null; sortOrder: number }
@@ -34,14 +58,13 @@ export type CategoryEditorTarget =
 
 @Component({
   selector: 'app-category-editor-sheet',
-  imports: [CategoryIcon, UiButton, UiInput, UiSelect, UiSheet, UiSheetFooter],
+  imports: [CategoryIcon, NgIcon, UiAlert, UiButton, UiInput, UiSelect, UiSheet, UiSheetFooter],
+  providers: [provideIcons({ lucideBan, lucideCheck })],
   template: `
     <ui-sheet [(open)]="open" [title]="title()" [description]="context()">
       <form class="flex flex-col gap-5" novalidate (submit)="submit($event)">
         @if (failure(); as message) {
-          <p role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {{ message }}
-          </p>
+          <ui-alert>{{ message }}</ui-alert>
         }
         <ui-input
           label="Nombre"
@@ -67,32 +90,43 @@ export type CategoryEditorTarget =
         </div>
 
         <fieldset>
-          <legend class="mb-2 text-sm font-medium text-foreground">Color</legend>
-          <div class="flex flex-wrap gap-2" role="radiogroup" aria-label="Color">
-            <button
-              type="button"
-              role="radio"
-              [attr.aria-checked]="color() === null"
-              aria-label="Sin color"
-              class="flex size-9 items-center justify-center rounded-full border border-border text-xs text-muted-foreground"
-              [class.ring-2]="color() === null"
-              [class.ring-ring]="color() === null"
-              (click)="color.set(null)"
-            >
-              —
-            </button>
-            @for (swatch of colors; track swatch.value) {
+          <legend class="mb-2 flex items-baseline gap-2 text-sm font-medium text-foreground">
+            Color
+            <span class="font-normal text-muted-foreground" data-testid="selected-colour">{{
+              selectedLabel()
+            }}</span>
+          </legend>
+          <div
+            class="grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] gap-2"
+            role="radiogroup"
+            aria-label="Color"
+          >
+            @for (choice of colourChoices; track choice.id; let index = $index) {
               <button
                 type="button"
                 role="radio"
-                [attr.aria-checked]="selectedKey() === swatch.key"
-                [attr.aria-label]="swatch.label"
-                class="category-swatch size-9 rounded-full ring-offset-2 ring-offset-background"
-                [class.ring-2]="selectedKey() === swatch.key"
-                [class.ring-ring]="selectedKey() === swatch.key"
-                [style.--category-color]="'var(--category-' + swatch.key + ')'"
-                (click)="color.set(swatch.value)"
-              ></button>
+                data-colour-choice
+                [attr.aria-checked]="selectedKey() === choice.key"
+                [attr.aria-label]="choice.label"
+                [attr.tabindex]="focusIndex() === index ? 0 : -1"
+                class="flex size-11 items-center justify-center rounded-full ring-offset-2 ring-offset-popover transition-shadow duration-150 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+                [class]="
+                  choice.key === null
+                    ? 'glass-fill text-muted-foreground'
+                    : 'category-swatch text-background'
+                "
+                [class.ring-2]="selectedKey() === choice.key"
+                [class.ring-ring]="selectedKey() === choice.key"
+                [style.--category-color]="choice.key === null ? null : colourVar(choice.key)"
+                (click)="selectColour(choice.key)"
+                (keydown)="onSwatchKeydown($event)"
+              >
+                @if (selectedKey() === choice.key) {
+                  <ng-icon name="lucideCheck" size="20" aria-hidden="true" />
+                } @else if (choice.key === null) {
+                  <ng-icon name="lucideBan" size="18" aria-hidden="true" />
+                }
+              </button>
             }
           </div>
         </fieldset>
@@ -114,7 +148,7 @@ export class CategoryEditorSheet {
   readonly saved = output<Category>();
 
   protected readonly nameMaxLength = NAME_MAX_LENGTH;
-  protected readonly colors = CATEGORY_COLORS;
+  protected readonly colourChoices = COLOUR_CHOICES;
   protected readonly iconOptions: UiSelectOption[] = CATEGORY_ICONS.map((option) => ({
     value: option.key,
     label: option.label,
@@ -129,6 +163,15 @@ export class CategoryEditorSheet {
   private readonly attempted = signal(false);
 
   protected readonly selectedKey = computed(() => categoryColorKey(this.color()));
+  protected readonly selectedLabel = computed(
+    () => COLOUR_CHOICES.find((choice) => choice.key === this.selectedKey())?.label ?? '',
+  );
+  protected readonly focusIndex = computed(() =>
+    Math.max(
+      0,
+      COLOUR_CHOICES.findIndex((choice) => choice.key === this.selectedKey()),
+    ),
+  );
   protected readonly title = computed(() => {
     const target = this.target();
     if (target === null || target.mode === 'edit') {
@@ -167,6 +210,31 @@ export class CategoryEditorSheet {
         untracked(() => this.reset());
       }
     });
+  }
+
+  protected colourVar(key: CategoryColorKey): string {
+    return `var(--category-${key})`;
+  }
+
+  protected selectColour(key: CategoryColorKey | null): void {
+    this.color.set(key === null ? null : categoryColorValue(key));
+  }
+
+  protected onSwatchKeydown(event: KeyboardEvent): void {
+    const step = NEXT_KEYS.has(event.key) ? 1 : PREVIOUS_KEYS.has(event.key) ? -1 : 0;
+    if (step === 0) {
+      return;
+    }
+    event.preventDefault();
+    const count = COLOUR_CHOICES.length;
+    const index = (this.focusIndex() + step + count) % count;
+    const choice = COLOUR_CHOICES[index];
+    if (choice === undefined) {
+      return;
+    }
+    this.selectColour(choice.key);
+    const group = (event.currentTarget as HTMLElement).parentElement;
+    group?.querySelectorAll<HTMLElement>('[data-colour-choice]')[index]?.focus();
   }
 
   protected async submit(event: Event): Promise<void> {

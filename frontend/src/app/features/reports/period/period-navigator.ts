@@ -44,6 +44,11 @@ export class PeriodNavigator {
   });
 
   constructor() {
+    this.reload();
+  }
+
+  reload(): void {
+    this.loadFailed.set(false);
     this.periodsApi.current().subscribe({
       next: (period) => this.currentPeriod.set(period),
       error: () => this.loadFailed.set(true),

@@ -3,7 +3,7 @@ import { signal } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { fireEvent, render, screen, within } from '@testing-library/angular';
 import userEvent from '@testing-library/user-event';
-import { Observable, Subject, of, throwError } from 'rxjs';
+import { Observable, Subject, defer, of, throwError } from 'rxjs';
 import { AccountsApi } from '../../../core/api/accounts.api';
 import { CategoriesApi } from '../../../core/api/categories.api';
 import { Category, QuickAddDefaults } from '../../../core/api/models';
@@ -113,18 +113,18 @@ function plusButton(): HTMLElement {
 }
 
 describe('Quick add', () => {
-  it('saves an expense with defaults in 3 taps: +, category, Guardar', async () => {
+  it('saves an expense with defaults in 4 taps: +, amount, category, Guardar', async () => {
     const { transactionsApi, sheets, tap, taps, user } = await setup();
 
     await tap(plusButton());
     const dialog = await screen.findByRole('dialog', { name: 'Nuevo movimiento' });
     const amount = within(dialog).getByRole('textbox', { name: /importe/i });
-    await vi.waitFor(() => expect(amount).toHaveFocus());
+    await tap(amount);
     await user.keyboard('12,50');
     await tap(await within(dialog).findByRole('button', { name: 'Supermercado' }));
     await tap(within(document.body).getByRole('button', { name: 'Guardar' }));
 
-    expect(taps()).toBe(3);
+    expect(taps()).toBe(4);
     expect(transactionsApi.create).toHaveBeenCalledWith({
       type: 'expense',
       amount_cents: 1250,
@@ -137,6 +137,28 @@ describe('Quick add', () => {
     });
     expect(sheets.changes()).toBe(1);
     expect(sheets.quickAddOpen()).toBe(false);
+  });
+
+  it('lifts the footer above the on-screen keyboard while a field has focus', async () => {
+    const viewport = Object.assign(new EventTarget(), { height: window.innerHeight, offsetTop: 0 });
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
+    try {
+      const { tap } = await setup();
+      await tap(plusButton());
+      const dialog = await screen.findByRole('dialog', { name: 'Nuevo movimiento' });
+      await tap(within(dialog).getByRole('textbox', { name: /importe/i }));
+
+      viewport.height = window.innerHeight - 336;
+      viewport.dispatchEvent(new Event('resize'));
+
+      const footer = within(document.body).getByTestId('quick-add-footer');
+      await vi.waitFor(() =>
+        expect(footer.style.getPropertyValue('--keyboard-inset')).toBe('336px'),
+      );
+      expect(within(footer).getByRole('button', { name: 'Guardar' })).toBeInTheDocument();
+    } finally {
+      Reflect.deleteProperty(window, 'visualViewport');
+    }
   });
 
   it('prefills today and the default account and shows frequent categories per type', async () => {
@@ -223,6 +245,23 @@ describe('Quick add', () => {
       merchant: null,
       note: null,
     });
+  });
+
+  it('offers a retry when the defaults fail to load', async () => {
+    let attempts = 0;
+    const flakyDefaults$ = defer(() =>
+      attempts++ === 0 ? throwError(() => new Error('offline')) : of(DEFAULTS),
+    );
+    const { user } = await setup(flakyDefaults$);
+    await user.click(plusButton());
+    const dialog = await screen.findByRole('dialog', { name: 'Nuevo movimiento' });
+
+    const alert = await within(dialog).findByTestId('defaults-failure');
+    expect(alert).toHaveTextContent('No se pudieron cargar los valores por defecto.');
+    await user.click(within(alert).getByRole('button', { name: 'Reintentar' }));
+
+    expect(await within(dialog).findByRole('button', { name: 'Supermercado' })).toBeVisible();
+    expect(within(dialog).queryByTestId('defaults-failure')).not.toBeInTheDocument();
   });
 
   it('keeps a date picked before late defaults arrive', async () => {

@@ -49,4 +49,12 @@ describe('PeriodSwitcher', () => {
     expect(next).toHaveBeenCalledTimes(1);
     expect(current).toHaveBeenCalledTimes(1);
   });
+  it('shows a skeleton until the period is known', async () => {
+    await setup({ label: null });
+
+    const name = screen.getByTestId('period-name');
+    expect(name).toHaveTextContent('Cargando periodo');
+    expect(name.querySelector('ui-skeleton')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Periodo anterior' })).toBeDisabled();
+  });
 });

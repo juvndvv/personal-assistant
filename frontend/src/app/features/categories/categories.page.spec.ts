@@ -146,4 +146,48 @@ describe('CategoriesPage', () => {
     );
     expect(message).not.toHaveTextContent(/presupuesto/i);
   });
+
+  it('offers a retry when the tree fails to load', async () => {
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(throwError(() => new Error('offline')))
+      .mockReturnValue(of(expenseTree));
+    await render(CategoriesPage, {
+      providers: [
+        provideRouter([]),
+        { provide: CategoriesApi, useValue: { list } },
+        { provide: UiToast, useValue: { success: vi.fn(), error: vi.fn() } },
+      ],
+    });
+    const user = userEvent.setup();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No se pudieron cargar las categorías.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    expect(await screen.findByText('Alimentación')).toBeInTheDocument();
+  });
+
+  it('picks colours as palette keys with keyboard support', async () => {
+    const { api, user } = await setup();
+
+    await user.click(screen.getByRole('button', { name: 'Nueva categoría' }));
+    await user.type(await screen.findByLabelText(/nombre/i), 'Ocio');
+    const none = screen.getByRole('radio', { name: 'Sin color' });
+    expect(none).toHaveAttribute('aria-checked', 'true');
+    expect(none).toHaveAttribute('tabindex', '0');
+
+    none.focus();
+    await user.keyboard('{ArrowRight}');
+
+    const blue = screen.getByRole('radio', { name: 'Azul' });
+    expect(blue).toHaveAttribute('aria-checked', 'true');
+    expect(blue).toHaveFocus();
+    expect(blue.style.getPropertyValue('--category-color')).toBe('var(--category-blue)');
+    expect(screen.getByTestId('selected-colour')).toHaveTextContent('Azul');
+
+    await user.click(screen.getByRole('button', { name: 'Crear' }));
+    expect(api.create).toHaveBeenCalledWith(expect.objectContaining({ color: '#3566F0' }));
+  });
 });

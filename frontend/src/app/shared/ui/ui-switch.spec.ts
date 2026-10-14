@@ -11,7 +11,7 @@ describe('UiSwitch', () => {
       { imports: [UiSwitch], componentProperties: { checked } },
     );
 
-    const control = screen.getByRole('switch', { name: /reducir transparencia/i });
+    const control = screen.getByRole('switch', { name: 'Reducir transparencia' });
     await userEvent.setup().click(control);
 
     expect(checked()).toBe(true);

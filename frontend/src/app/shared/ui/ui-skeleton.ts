@@ -24,7 +24,7 @@ const SHAPE_CLASS: Record<UiSkeletonShape, string> = {
     @for (line of lineIndexes(); track line; let last = $last) {
       <span
         data-testid="skeleton-bone"
-        class="block bg-muted motion-safe:animate-pulse dark:bg-fill-strong"
+        class="block bg-fill-on-card motion-safe:animate-pulse"
         [class]="shapeClass()"
         [class.mt-2]="line > 0"
         [style.width]="last && lines() > 1 ? '60%' : (width() ?? null)"

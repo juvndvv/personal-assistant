@@ -15,15 +15,13 @@ import { nextUiId } from './ui-types';
       [ariaDescribedby]="description() ? descriptionId() : undefined"
       class="flex w-full"
     >
-      <span class="flex min-w-0 flex-1 flex-col">
-        <span class="text-sm font-medium text-foreground"><ng-content /></span>
-        @if (description()) {
-          <span [id]="descriptionId()" class="text-xs font-normal text-muted-foreground">{{
-            description()
-          }}</span>
-        }
-      </span>
+      <span class="min-w-0 flex-1 text-sm font-medium text-foreground"><ng-content /></span>
     </yuw-switch>
+    @if (description()) {
+      <span [id]="descriptionId()" class="block ps-12 text-xs text-muted-foreground">{{
+        description()
+      }}</span>
+    }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

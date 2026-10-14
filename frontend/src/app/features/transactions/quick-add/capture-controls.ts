@@ -19,6 +19,7 @@ import { lucideCamera, lucideMic, lucideSend, lucideX } from '@ng-icons/lucide';
 import { CaptureKind } from '../../../core/api/models';
 import { ImageCompressor } from '../../../core/capture/image-compressor';
 import { MAX_RECORDING_MS, VoiceRecorder } from '../../../core/capture/voice-recorder';
+import { UiAlert, UiButton } from '../../../shared/ui';
 
 export interface CapturedFile {
   kind: CaptureKind;
@@ -27,6 +28,9 @@ export interface CapturedFile {
 }
 
 export const HOLD_TO_TALK_MS = 400;
+
+export const OVERLAY_FEEDBACK =
+  'hover:bg-[image:linear-gradient(var(--color-hover),var(--color-hover))] active:bg-[image:linear-gradient(var(--color-pressed),var(--color-pressed))]';
 
 const RECORDER_MESSAGES: Partial<Record<string, string>> = {
   denied:
@@ -43,18 +47,70 @@ function formatSeconds(milliseconds: number): string {
 
 @Component({
   selector: 'app-capture-controls',
-  imports: [NgIcon],
+  imports: [NgIcon, UiAlert, UiButton],
   providers: [VoiceRecorder, provideIcons({ lucideCamera, lucideMic, lucideSend, lucideX })],
-  host: { class: 'contents' },
+  host: { class: 'flex flex-col gap-3' },
   template: `
-    <div class="flex shrink-0 gap-2">
+    @if (recording()) {
+      <div
+        class="flex flex-col gap-3 rounded-card bg-callout-error p-3"
+        role="status"
+        data-testid="voice-recording"
+      >
+        <div class="flex items-center gap-3">
+          <span
+            class="size-2.5 shrink-0 rounded-full bg-destructive motion-safe:animate-pulse"
+            aria-hidden="true"
+          ></span>
+          <span class="text-[0.9375rem] font-medium text-foreground">Grabando…</span>
+          <span
+            class="tabular-amount ms-auto text-sm text-muted-foreground"
+            data-testid="voice-timer"
+          >
+            {{ elapsed() }} / {{ limit }}
+          </span>
+        </div>
+        <div
+          class="h-2 overflow-hidden rounded-capsule bg-fill-on-card"
+          role="meter"
+          aria-label="Nivel del micrófono"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          [attr.aria-valuenow]="levelPercent()"
+        >
+          <div
+            class="h-full rounded-capsule bg-destructive transition-[width] duration-100"
+            [style.width.%]="levelPercent()"
+          ></div>
+        </div>
+        <p class="text-sm text-muted-foreground">
+          Di el importe, el comercio y la cuenta. Suelta o pulsa Enviar al terminar.
+        </p>
+        <div class="flex gap-2">
+          <ui-button class="min-w-0 flex-1" [fullWidth]="true" (clicked)="finish()">
+            <ng-icon name="lucideSend" size="16" aria-hidden="true" />
+            Enviar audio
+          </ui-button>
+          <ui-button variant="secondary" (clicked)="discard()">
+            <ng-icon name="lucideX" size="16" aria-hidden="true" />
+            Cancelar
+          </ui-button>
+        </div>
+      </div>
+    }
+    <p role="alert" class="sr-only" data-testid="capture-problem-announcer">{{ problem() }}</p>
+    @if (problem(); as message) {
+      <ui-alert tone="warning" data-testid="capture-problem">{{ message }}</ui-alert>
+    }
+    <div class="flex items-center gap-2">
       <button
+        #voiceButton
         type="button"
-        class="capture-button inline-flex h-12 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-colors select-none"
+        class="capture-button inline-flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-capsule px-4 text-[0.9375rem] font-medium transition-colors duration-150 select-none disabled:opacity-50"
         [class]="
           recording()
-            ? 'border-destructive bg-destructive text-destructive-foreground'
-            : 'border-border bg-background text-foreground hover:bg-muted'
+            ? 'bg-destructive text-destructive-foreground'
+            : 'glass-fill text-foreground ' + overlayFeedback
         "
         [attr.aria-pressed]="recording()"
         aria-describedby="capture-voice-hint"
@@ -66,19 +122,21 @@ function formatSeconds(milliseconds: number): string {
         (click)="keyboardToggle($event)"
         (contextmenu)="$event.preventDefault()"
       >
-        <ng-icon name="lucideMic" size="18" aria-hidden="true" />
+        <ng-icon name="lucideMic" size="20" aria-hidden="true" />
         Voz
       </button>
       <button
         type="button"
-        class="inline-flex h-12 items-center gap-1.5 rounded-xl border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+        class="inline-flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-capsule px-4 text-[0.9375rem] font-medium text-foreground glass-fill transition-colors duration-150 disabled:opacity-50"
+        [class]="overlayFeedback"
         data-testid="capture-photo"
         [disabled]="disabled() || recording() || compressing()"
         (click)="pickPhoto()"
       >
-        <ng-icon name="lucideCamera" size="18" aria-hidden="true" />
+        <ng-icon name="lucideCamera" size="20" aria-hidden="true" />
         Foto
       </button>
+      <ng-content />
       <input
         #photoInput
         type="file"
@@ -94,70 +152,6 @@ function formatSeconds(milliseconds: number): string {
     <p id="capture-voice-hint" class="sr-only">
       Mantén pulsado para hablar y suelta para enviar, o toca para empezar y detener.
     </p>
-    @if (recording()) {
-      <div
-        class="col-span-full flex flex-col gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-3"
-        role="status"
-        data-testid="voice-recording"
-      >
-        <div class="flex items-center gap-3">
-          <span
-            class="size-2.5 animate-pulse rounded-full bg-destructive"
-            aria-hidden="true"
-          ></span>
-          <span class="text-sm font-medium text-foreground">Grabando…</span>
-          <span
-            class="ms-auto text-sm tabular-nums text-muted-foreground"
-            data-testid="voice-timer"
-          >
-            {{ elapsed() }} / {{ limit }}
-          </span>
-        </div>
-        <div
-          class="h-2 overflow-hidden rounded-full bg-muted"
-          role="meter"
-          aria-label="Nivel del micrófono"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          [attr.aria-valuenow]="levelPercent()"
-        >
-          <div
-            class="h-full rounded-full bg-destructive transition-[width] duration-100"
-            [style.width.%]="levelPercent()"
-          ></div>
-        </div>
-        <p class="text-xs text-muted-foreground">
-          Di el importe, el comercio y la cuenta. Suelta o pulsa Enviar al terminar.
-        </p>
-        <div class="flex gap-2">
-          <button
-            type="button"
-            class="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-medium text-primary-foreground"
-            (click)="finish()"
-          >
-            <ng-icon name="lucideSend" size="16" aria-hidden="true" />
-            Enviar audio
-          </button>
-          <button
-            type="button"
-            class="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-border px-3 text-sm font-medium text-foreground"
-            (click)="discard()"
-          >
-            <ng-icon name="lucideX" size="16" aria-hidden="true" />
-            Cancelar
-          </button>
-        </div>
-      </div>
-    }
-    @if (problem(); as message) {
-      <p
-        role="alert"
-        class="col-span-full rounded-lg bg-warning/15 px-3 py-2 text-sm text-foreground"
-        data-testid="capture-problem"
-      >
-        {{ message }}
-      </p>
-    }
   `,
   styles: '.capture-button { touch-action: none; -webkit-touch-callout: none; }',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -166,12 +160,14 @@ export class CaptureControls {
   private readonly recorder = inject(VoiceRecorder);
   private readonly compressor = inject(ImageCompressor);
   private readonly photoInput = viewChild.required<ElementRef<HTMLInputElement>>('photoInput');
+  private readonly voiceButton = viewChild.required<ElementRef<HTMLButtonElement>>('voiceButton');
 
   readonly disabled = input(false, { transform: booleanAttribute });
   readonly active = input(true, { transform: booleanAttribute });
   readonly captured = output<CapturedFile>();
 
   protected readonly limit = formatSeconds(MAX_RECORDING_MS);
+  protected readonly overlayFeedback = OVERLAY_FEEDBACK;
   protected readonly compressing = signal(false);
   private readonly photoProblem = signal<string | null>(null);
   private pressedAt = 0;
@@ -237,6 +233,10 @@ export class CaptureControls {
       return;
     }
     void this.startRecording();
+  }
+
+  focusVoice(): void {
+    this.voiceButton().nativeElement.focus();
   }
 
   protected finish(): void {

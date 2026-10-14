@@ -9,8 +9,8 @@ import {
 } from '@ng-icons/lucide';
 import { Transaction } from '../../../core/api/models';
 import { EurPipe } from '../../../core/money/eur.pipe';
-import { CATEGORY_ICON_SVGS, iconNameFor } from '../../categories/category-appearance';
-import { LedgerReferenceData } from '../reference-data';
+import { CategoryIcon } from '../../categories/category-icon';
+import { LedgerReferenceData, categoryVisual } from '../reference-data';
 import {
   TRANSACTION_ORIGIN_LABELS,
   transactionAmount,
@@ -20,10 +20,9 @@ import {
 
 @Component({
   selector: 'app-transaction-row',
-  imports: [CdkMenu, CdkMenuItem, CdkMenuTrigger, EurPipe, NgIcon],
+  imports: [CategoryIcon, CdkMenu, CdkMenuItem, CdkMenuTrigger, EurPipe, NgIcon],
   providers: [
     provideIcons({
-      ...CATEGORY_ICON_SVGS,
       lucideArrowLeftRight,
       lucideEllipsisVertical,
       lucidePaperclip,
@@ -32,34 +31,39 @@ import {
   ],
   host: { class: 'block' },
   template: `
-    <div class="flex h-16 items-center gap-3 px-3" data-testid="transaction-row">
+    <div class="flex h-16 items-center gap-1 ps-4 pe-1.5" data-testid="transaction-row">
       <button
         type="button"
-        class="flex min-w-0 flex-1 items-center gap-3 text-start"
+        class="flex min-w-0 flex-1 items-center gap-3 self-stretch text-start"
         [attr.aria-label]="'Editar ' + title()"
         (click)="edit.emit(transaction())"
       >
-        <span
-          class="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
-          aria-hidden="true"
-        >
-          <ng-icon [name]="icon()" size="18" />
-        </span>
+        @if (category(); as visual) {
+          <app-category-icon [icon]="visual.icon" [color]="visual.color" size="md" />
+        } @else {
+          <span
+            class="flex size-10 shrink-0 items-center justify-center rounded-full bg-fill-on-card text-transfer"
+            aria-hidden="true"
+            data-testid="movement-icon"
+          >
+            <ng-icon [name]="neutralIcon()" size="20" />
+          </span>
+        }
         <span class="min-w-0 flex-1">
           <span class="flex min-w-0 items-center gap-1.5">
             <span class="truncate font-medium text-foreground">{{ title() }}</span>
             @if (transaction().origin === 'recurring') {
               <span
-                class="shrink-0 rounded-md bg-info/15 px-1.5 py-px text-[0.6875rem] font-medium text-info-text"
+                class="shrink-0 rounded-capsule bg-tint-blue px-2 text-xs leading-5 font-medium text-info-text"
                 data-testid="origin-badge"
                 >{{ recurringLabel }}</span
               >
             }
           </span>
-          <span class="block truncate text-xs text-muted-foreground">
+          <span class="block truncate text-sm text-muted-foreground">
             {{ subtitle() }}
             @for (tag of transaction().tags; track tag.id) {
-              <span class="ms-1 text-primary-text">#{{ tag.name }}</span>
+              <span class="ms-1 text-link">#{{ tag.name }}</span>
             }
           </span>
         </span>
@@ -67,12 +71,12 @@ import {
           <ng-icon
             name="lucidePaperclip"
             size="14"
-            class="text-muted-foreground"
+            class="shrink-0 text-muted-foreground"
             aria-label="Con justificante"
           />
         }
         <span
-          class="shrink-0 font-medium tabular-nums"
+          class="amount shrink-0 text-base"
           [class]="amountClass()"
           data-testid="transaction-amount"
         >
@@ -81,7 +85,7 @@ import {
       </button>
       <button
         type="button"
-        class="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+        class="flex size-11 shrink-0 items-center justify-center rounded-capsule text-muted-foreground transition-colors duration-150 hover:bg-hover active:bg-pressed"
         [attr.aria-label]="'Acciones de ' + title()"
         [cdkMenuTriggerFor]="actions"
       >
@@ -91,12 +95,12 @@ import {
     <ng-template #actions>
       <div
         cdkMenu
-        class="min-w-40 rounded-lg border border-border bg-popover p-1 text-sm text-popover-foreground shadow-md"
+        class="glass-menu min-w-44 rounded-menu p-1.5 text-[0.9375rem] text-popover-foreground"
       >
         <button
           cdkMenuItem
           type="button"
-          class="block w-full rounded-md px-3 py-2 text-start hover:bg-muted"
+          class="flex min-h-11 w-full items-center rounded-menu-item px-3 text-start transition-colors duration-150 hover:bg-hover focus-visible:bg-hover"
           (cdkMenuItemTriggered)="edit.emit(transaction())"
         >
           Editar
@@ -104,7 +108,7 @@ import {
         <button
           cdkMenuItem
           type="button"
-          class="block w-full rounded-md px-3 py-2 text-start text-destructive hover:bg-muted"
+          class="flex min-h-11 w-full items-center rounded-menu-item px-3 text-start text-danger-text transition-colors duration-150 hover:bg-hover focus-visible:bg-hover"
           (cdkMenuItemTriggered)="remove.emit(transaction())"
         >
           Eliminar
@@ -131,21 +135,21 @@ export class TransactionRow {
   protected readonly amountClass = computed(() => {
     const { cents, signed } = this.amount();
     if (!signed) {
-      return 'text-foreground';
+      return 'text-transfer';
     }
-    return cents < 0 ? 'text-foreground' : 'text-success-text';
+    return cents > 0 ? 'text-income' : 'text-expense';
   });
-  protected readonly icon = computed(() => {
+  protected readonly neutralIcon = computed(() =>
+    this.transaction().type === 'adjustment' ? 'lucideScale' : 'lucideArrowLeftRight',
+  );
+  protected readonly category = computed(() => {
     const transaction = this.transaction();
-    if (transaction.type === 'transfer') {
-      return 'lucideArrowLeftRight';
-    }
-    if (transaction.type === 'adjustment') {
-      return 'lucideScale';
+    if (transaction.type === 'transfer' || transaction.type === 'adjustment') {
+      return null;
     }
     const categoryId = transaction.category?.id;
     const category =
       categoryId === undefined ? undefined : this.reference.categoryById().get(categoryId);
-    return iconNameFor(category?.icon ?? null);
+    return categoryVisual(category ?? { icon: null, color: null });
   });
 }

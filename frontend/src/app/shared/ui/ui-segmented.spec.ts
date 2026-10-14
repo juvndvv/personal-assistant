@@ -39,4 +39,26 @@ describe('UiSegmented', () => {
     expect(value()).toBe('dark');
     expect(screen.getByRole('radio', { name: 'Oscuro' })).toHaveFocus();
   });
+
+  it('keeps 44 px single-line segments and a solid indicator on glass', async () => {
+    const value = signal('comma');
+    const options = [
+      { value: 'semicolon', label: 'Punto y coma (Excel)' },
+      { value: 'comma', label: 'Coma' },
+    ];
+    await render(
+      `<ui-segmented ariaLabel="Separador" onGlass [options]="options" [(value)]="value" />`,
+      { imports: [UiSegmented], componentProperties: { value, options } },
+    );
+
+    expect(screen.getByRole('radiogroup', { name: 'Separador' })).toHaveClass('glass-fill');
+    expect(screen.getByTestId('segmented-indicator')).toHaveClass(
+      'bg-segment-indicator-on-glass',
+      'ring-segment-indicator-edge',
+    );
+    expect(screen.getByTestId('segmented-indicator')).not.toHaveClass('bg-segment-indicator');
+    for (const segment of screen.getAllByRole('radio')) {
+      expect(segment).toHaveClass('min-h-11', 'truncate');
+    }
+  });
 });

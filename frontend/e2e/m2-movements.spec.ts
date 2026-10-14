@@ -100,7 +100,8 @@ async function addExpenseWithDetails(
 ): Promise<void> {
   await plusButton(page).click();
   const sheet = quickAdd(page);
-  await expect(sheet.getByRole('textbox', { name: 'Importe' })).toBeFocused();
+  await expect(sheet.getByRole('textbox', { name: 'Importe' })).not.toBeFocused();
+  await sheet.getByRole('textbox', { name: 'Importe' }).click();
   await page.keyboard.type(amount);
   await categoryChips(page).first().click();
   await sheet.getByRole('button', { name: 'Más detalles' }).click();
@@ -145,7 +146,7 @@ test.describe('M2 movements journey', () => {
     await ensureExpenseCategory(page);
   });
 
-  test('quick add saves an expense with defaults in 3 clicks on the last used account', async ({
+  test('quick add saves an expense with defaults in 4 taps on the last used account', async ({
     page,
   }) => {
     const suffix = uniqueSuffix();
@@ -166,7 +167,8 @@ test.describe('M2 movements journey', () => {
 
     await tap(plusButton(page));
     const sheet = quickAdd(page);
-    await expect(sheet.getByRole('textbox', { name: 'Importe' })).toBeFocused();
+    await expect(sheet.getByRole('textbox', { name: 'Importe' })).not.toBeFocused();
+    await tap(sheet.getByRole('textbox', { name: 'Importe' }));
     await expect(sheet.getByTestId('quick-add-summary')).toHaveText(`Hoy · ${account.name}`);
     await page.keyboard.type('12,34');
     const chip = categoryChips(page).first();
@@ -175,7 +177,7 @@ test.describe('M2 movements journey', () => {
     await tap(page.getByRole('button', { name: 'Guardar', exact: true }));
 
     await expect(sheet).toBeHidden();
-    expect(clicks).toBe(3);
+    expect(clicks).toBe(4);
     await expect(page.getByText('Gasto guardado')).toBeVisible();
 
     await page.goto(`/cuentas/${account.id}`);
@@ -387,7 +389,8 @@ test.describe('M2 movements journey', () => {
     });
     await plusButton(page).click();
     const sheet = quickAdd(page);
-    await expect(sheet.getByRole('textbox', { name: 'Importe' })).toBeFocused();
+    await expect(sheet.getByRole('textbox', { name: 'Importe' })).not.toBeFocused();
+    await sheet.getByRole('textbox', { name: 'Importe' }).click();
     await page.keyboard.type('1');
     await categoryChips(page).first().click();
     await sheet.getByRole('button', { name: 'Más detalles' }).click();

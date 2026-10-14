@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AccountsApi } from '../../core/api/accounts.api';
 import { serverMessage, validationErrors } from '../../core/api/api-error';
@@ -11,6 +10,7 @@ import { formatPeriodLabel } from '../../core/date/period-label';
 import { ThemeService, isThemePreference } from '../../core/theme/theme.service';
 import { PageHeader } from '../../shared/layout/page-header';
 import {
+  UiAlert,
   UiButton,
   UiCard,
   UiInput,
@@ -18,6 +18,7 @@ import {
   UiSegmented,
   UiSelect,
   UiSelectOption,
+  UiSkeleton,
   UiSwitch,
   UiToast,
 } from '../../shared/ui';
@@ -25,6 +26,7 @@ import {
 const MONTH_START_DAYS = Array.from({ length: 28 }, (_, index) => index + 1);
 const TTL_MIN_DAYS = 1;
 const TTL_MAX_DAYS = 90;
+const SKELETON_FIELDS = [0, 1, 2];
 const THEME_OPTIONS: readonly UiSegmentOption[] = [
   { value: 'light', label: 'Claro' },
   { value: 'dark', label: 'Oscuro' },
@@ -39,14 +41,19 @@ interface SettingsErrors {
 
 @Component({
   selector: 'app-settings-page',
-  imports: [PageHeader, RouterLink, UiButton, UiCard, UiInput, UiSegmented, UiSelect, UiSwitch],
+  imports: [
+    PageHeader,
+    UiAlert,
+    UiButton,
+    UiCard,
+    UiInput,
+    UiSegmented,
+    UiSelect,
+    UiSkeleton,
+    UiSwitch,
+  ],
   template: `
-    <a
-      routerLink="/mas"
-      class="mb-4 inline-flex min-w-11 items-center text-sm text-primary-text hover:underline"
-      >← Más</a
-    >
-    <app-page-header title="Ajustes" />
+    <app-page-header title="Ajustes" backLink="/mas" backLabel="Más" />
 
     <section uiCard class="mb-6 flex flex-col gap-4" aria-labelledby="appearance-heading">
       <h2 id="appearance-heading" class="text-lg font-semibold text-foreground">Apariencia</h2>
@@ -67,18 +74,15 @@ interface SettingsErrors {
       >
     </section>
 
-    @if (failure(); as message) {
-      <p role="alert" class="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-        {{ message }}
-      </p>
-    }
-
-    @if (loaded()) {
-      <form
-        class="flex flex-col gap-6 rounded-2xl border border-border bg-background p-4 md:p-6"
-        novalidate
-        (submit)="save($event)"
-      >
+    @if (loadFailed()) {
+      <ui-alert retryable [retrying]="loading()" (retry)="load()">
+        No se pudieron cargar los ajustes.
+      </ui-alert>
+    } @else if (loaded()) {
+      @if (failure(); as message) {
+        <ui-alert class="mb-4">{{ message }}</ui-alert>
+      }
+      <form uiCard padding="lg" class="flex flex-col gap-6" novalidate (submit)="save($event)">
         <section class="flex flex-col gap-3">
           <ui-select
             label="Día de inicio del mes"
@@ -94,7 +98,10 @@ interface SettingsErrors {
             "
           />
           <div
-            class="rounded-xl bg-muted px-4 py-3 text-sm"
+            uiCard
+            variant="grouped"
+            padding="sm"
+            class="text-sm"
             aria-live="polite"
             data-testid="period-preview"
           >
@@ -104,9 +111,13 @@ interface SettingsErrors {
                 Del {{ longDate(period.start) }} al {{ longDate(period.end) }}
               </p>
             } @else if (previewFailed()) {
-              <p class="text-destructive">No se pudo calcular el periodo.</p>
+              <ui-alert retryable (retry)="retryPreview()"
+                >No se pudo calcular el periodo.</ui-alert
+              >
             } @else {
-              <p class="text-muted-foreground">Calculando periodo…</p>
+              <span class="sr-only">Calculando periodo</span>
+              <ui-skeleton width="55%" />
+              <ui-skeleton class="mt-2" width="70%" />
             }
           </div>
         </section>
@@ -141,6 +152,18 @@ interface SettingsErrors {
           <ui-button type="submit" [loading]="saving()">Guardar ajustes</ui-button>
         </div>
       </form>
+    } @else {
+      <div uiCard padding="lg" role="status" aria-live="polite" data-testid="settings-loading">
+        <span class="sr-only">Cargando ajustes</span>
+        <div class="flex flex-col gap-6">
+          @for (field of skeletonFields; track field) {
+            <div class="flex flex-col gap-2">
+              <ui-skeleton width="40%" />
+              <ui-skeleton shape="block" height="2.75rem" />
+            </div>
+          }
+        </div>
+      </div>
     }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -158,7 +181,10 @@ export class SettingsPage {
     label: day === 1 ? '1 (mes natural)' : String(day),
   }));
 
+  protected readonly skeletonFields = SKELETON_FIELDS;
   protected readonly loaded = signal(false);
+  protected readonly loading = signal(false);
+  protected readonly loadFailed = signal(false);
   protected readonly saving = signal(false);
   protected readonly failure = signal<string | null>(null);
   protected readonly accounts = signal<Account[]>([]);
@@ -246,7 +272,11 @@ export class SettingsPage {
     }
   }
 
-  private async load(): Promise<void> {
+  protected async load(): Promise<void> {
+    if (this.loading()) {
+      return;
+    }
+    this.loading.set(true);
     try {
       const [settings, accounts] = await Promise.all([
         firstValueFrom(this.settingsApi.get()),
@@ -255,8 +285,11 @@ export class SettingsPage {
       this.accounts.set(accounts);
       this.apply(settings);
       this.loaded.set(true);
+      this.loadFailed.set(false);
     } catch {
-      this.failure.set('No se pudieron cargar los ajustes.');
+      this.loadFailed.set(true);
+    } finally {
+      this.loading.set(false);
     }
   }
 
@@ -268,6 +301,10 @@ export class SettingsPage {
     this.ttlDays.set(String(settings.orphan_draft_ttl_days));
     this.preview.set(settings.current_period);
     this.previewFailed.set(false);
+  }
+
+  protected retryPreview(): void {
+    void this.loadPreview(Number(this.monthStartDay()));
   }
 
   private async loadPreview(monthStartDay: number): Promise<void> {

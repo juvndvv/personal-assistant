@@ -1,4 +1,7 @@
 import { render, screen } from '@testing-library/angular';
+import { aCategory } from '../categories/testing/category-fixtures';
+import { LedgerReferenceData } from '../transactions/reference-data';
+import { referenceDataProviders } from '../transactions/testing/reference-fakes';
 import { BudgetStatus } from '../../core/api/models';
 import { formatCents } from '../../core/money/format-cents';
 import { BudgetProgressRow } from './budget-progress-row';
@@ -7,7 +10,10 @@ import { aBudgetItem } from './testing/budget-fixtures';
 const plain = (text: string) => text.replace(/\s+/g, ' ');
 
 async function renderRow(usedBp: number, status: BudgetStatus, actual: number) {
-  await render(BudgetProgressRow, {
+  const view = await render(BudgetProgressRow, {
+    providers: referenceDataProviders([
+      aCategory({ id: 10, name: 'Alimentación', color: '#C4520A' }),
+    ]),
     inputs: {
       item: aBudgetItem({
         budget_cents: 10000,
@@ -18,6 +24,8 @@ async function renderRow(usedBp: number, status: BudgetStatus, actual: number) {
       }),
     },
   });
+  await view.fixture.debugElement.injector.get(LedgerReferenceData).ensureLoaded();
+  view.fixture.detectChanges();
   return screen.getByRole('progressbar', { name: 'Presupuesto de Alimentación' });
 }
 
@@ -63,6 +71,14 @@ describe('BudgetProgressRow', () => {
       expect(bar).toHaveAttribute('aria-valuemax', '10000');
     },
   );
+
+  it('tints the category icon with its palette colour', async () => {
+    await renderRow(4000, 'ok', 4000);
+
+    expect(
+      screen.getByTestId('budget-row').querySelector('app-category-icon')?.getAttribute('style'),
+    ).toContain('--category-color: var(--category-orange)');
+  });
 
   it('shows spent against budget and what is left', async () => {
     await renderRow(9100, 'warning', 9100);

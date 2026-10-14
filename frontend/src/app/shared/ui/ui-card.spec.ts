@@ -40,6 +40,46 @@ describe('UiCard', () => {
     );
 
     expect(screen.getByTestId('grouped').className).toContain('bg-grouped');
-    expect(screen.getByTestId('tinted').className).toContain('bg-muted');
+    expect(screen.getByTestId('tinted').className).toContain('bg-fill-on-card');
+  });
+
+  it('keeps tinted cards visible when nested in dark elevated cards', async () => {
+    await render(`<ui-card variant="tinted" data-testid="tinted" />`, { imports: [UiCard] });
+
+    expect(screen.getByTestId('tinted').classList).toContain('bg-fill-on-card');
+    expect(screen.getByTestId('tinted').className).not.toContain('bg-muted');
+  });
+
+  it('insets focus rings inside divided cards so overflow clipping keeps them visible', async () => {
+    await render(`<ui-card divided data-testid="card"><a href="/">Fila</a></ui-card>`, {
+      imports: [UiCard],
+    });
+
+    expect(screen.getByTestId('card').classList).toContain('overflow-hidden');
+    expect(screen.getByTestId('card').classList).toContain('[&_:focus-visible]:-outline-offset-2');
+  });
+
+  it('is a block by default', async () => {
+    await render(`<ui-card data-testid="card" />`, { imports: [UiCard] });
+
+    expect(screen.getByTestId('card').classList).toContain('block');
+  });
+
+  it('leaves display to the consumer when it sets a layout class', async () => {
+    await render(`<section uiCard class="flex flex-col" data-testid="card">A</section>`, {
+      imports: [UiCard],
+    });
+
+    const card = screen.getByTestId('card');
+    expect(card.classList).toContain('flex');
+    expect(card.classList).not.toContain('block');
+  });
+
+  it('keeps block when the consumer only sets responsive layout classes', async () => {
+    await render(`<section uiCard class="md:grid" data-testid="card">A</section>`, {
+      imports: [UiCard],
+    });
+
+    expect(screen.getByTestId('card').classList).toContain('block');
   });
 });

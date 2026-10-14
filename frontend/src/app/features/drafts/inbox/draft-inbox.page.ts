@@ -7,7 +7,7 @@ import { serverMessage } from '../../../core/api/api-error';
 import { DraftsApi } from '../../../core/api/drafts.api';
 import { Draft } from '../../../core/api/models';
 import { PageHeader } from '../../../shared/layout/page-header';
-import { UiButton, UiEmptyState } from '../../../shared/ui';
+import { UiAlert, UiButton, UiCard, UiEmptyState, UiSkeletonList } from '../../../shared/ui';
 import { isRecurringDraft } from '../draft-display';
 import { PendingDrafts } from '../pending-drafts';
 import { RecurringConfirmSheet } from '../recurring-confirm/recurring-confirm-sheet';
@@ -17,35 +17,50 @@ const PAGE_SIZE = 50;
 
 @Component({
   selector: 'app-draft-inbox-page',
-  imports: [DraftRowContent, PageHeader, RecurringConfirmSheet, RouterLink, UiButton, UiEmptyState],
+  imports: [
+    DraftRowContent,
+    PageHeader,
+    RecurringConfirmSheet,
+    RouterLink,
+    UiAlert,
+    UiButton,
+    UiCard,
+    UiEmptyState,
+    UiSkeletonList,
+  ],
   providers: [provideIcons({ lucideInbox })],
   template: `
     <app-page-header
       title="Pendientes"
       subtitle="Borradores de voz, foto y fijos variables. Nada se guarda hasta que lo confirmes."
+      backLink="/movimientos"
+      backLabel="Movimientos"
     />
     @if (failure(); as message) {
-      <p role="alert" class="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <ui-alert class="mb-4" retryable [retrying]="loading()" (retry)="loadMore()">
         {{ message }}
-      </p>
+      </ui-alert>
     }
-    @if (loaded() && drafts().length === 0) {
-      <ui-empty-state
-        title="No hay borradores pendientes"
-        description="Cuando registres un gasto por voz o con una foto, aparecerá aquí hasta que lo revises."
-        icon="lucideInbox"
-      />
+    @if (!loaded()) {
+      <ui-card padding="none">
+        <ui-skeleton-list label="Cargando pendientes" [rows]="4" />
+      </ui-card>
+    } @else if (drafts().length === 0) {
+      @if (failure() === null) {
+        <ui-empty-state
+          title="No hay borradores pendientes"
+          description="Cuando registres un gasto por voz o con una foto, aparecerá aquí hasta que lo revises."
+          icon="lucideInbox"
+        />
+      }
     } @else {
-      <ul
-        class="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-background"
-        data-testid="draft-list"
-      >
+      <ul uiCard divided data-testid="draft-list">
         @for (draft of drafts(); track draft.id) {
           <li>
             @if (recurring(draft)) {
               <button
                 type="button"
-                class="flex w-full items-center gap-3 px-4 py-3 text-start hover:bg-muted/60"
+                class="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-start transition-colors duration-150 hover:bg-hover active:bg-pressed"
                 data-testid="draft-row"
                 (click)="confirming.set(draft)"
               >
@@ -54,7 +69,7 @@ const PAGE_SIZE = 50;
             } @else {
               <a
                 [routerLink]="['/pendientes', draft.id]"
-                class="flex items-center gap-3 px-4 py-3 hover:bg-muted/60"
+                class="flex min-h-16 items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-hover active:bg-pressed"
                 data-testid="draft-row"
               >
                 <app-draft-row-content [draft]="draft" />
@@ -69,9 +84,6 @@ const PAGE_SIZE = 50;
             Cargar más
           </ui-button>
         </div>
-      }
-      @if (!loaded()) {
-        <p class="mt-4 text-sm text-muted-foreground" role="status">Cargando pendientes…</p>
       }
     }
 

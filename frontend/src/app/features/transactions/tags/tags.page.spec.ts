@@ -83,4 +83,26 @@ describe('TagsPage', () => {
     expect(api.delete).toHaveBeenCalledWith(6);
     await vi.waitFor(() => expect(screen.queryByText('casa')).not.toBeInTheDocument());
   });
+
+  it('offers a retry when the tags fail to load', async () => {
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(throwError(() => new Error('offline')))
+      .mockReturnValue(of([{ id: 5, name: 'viaje roma', usage_count: 12 }]));
+    await render(TagsPage, {
+      providers: [
+        provideRouter([]),
+        { provide: TagsApi, useValue: { list } },
+        { provide: UiToast, useValue: { success: vi.fn(), error: vi.fn() } },
+      ],
+    });
+    const user = userEvent.setup();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No se pudieron cargar las etiquetas.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    expect(await screen.findByText('viaje roma')).toBeInTheDocument();
+  });
 });

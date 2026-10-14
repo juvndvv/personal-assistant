@@ -18,7 +18,14 @@ import { Draft, EntryType } from '../../../core/api/models';
 import { TransactionsApi } from '../../../core/api/transactions.api';
 import { formatDate } from '../../../core/date/iso-date';
 import { formatCents, formatCentsForInput } from '../../../core/money/format-cents';
-import { UiButton, UiMoneyInput, UiSheet, UiSheetFooter, UiToast } from '../../../shared/ui';
+import {
+  UiAlert,
+  UiButton,
+  UiMoneyInput,
+  UiSheet,
+  UiSheetFooter,
+  UiToast,
+} from '../../../shared/ui';
 import { entryErrorsFrom } from '../../transactions/entry-errors';
 import { MovementSheets } from '../../transactions/movement-sheets';
 import { DRAFT_NOT_PENDING_MESSAGE } from '../draft-display';
@@ -59,7 +66,7 @@ function confirmable(draft: Draft | null): ConfirmableDraft | null {
 
 @Component({
   selector: 'app-recurring-confirm-sheet',
-  imports: [RouterLink, UiButton, UiMoneyInput, UiSheet, UiSheetFooter],
+  imports: [RouterLink, UiAlert, UiButton, UiMoneyInput, UiSheet, UiSheetFooter],
   template: `
     <ui-sheet
       [open]="draft() !== null"
@@ -69,18 +76,18 @@ function confirmable(draft: Draft | null): ConfirmableDraft | null {
     >
       <form class="flex flex-col gap-4 pb-2" novalidate (submit)="confirm($event)">
         @if (failure(); as message) {
-          <div role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <ui-alert>
             <p>{{ message }}</p>
             @if (needsFullReview()) {
               <a
                 [routerLink]="['/pendientes', draft()?.id]"
-                class="mt-1 inline-block font-medium underline"
+                class="mt-1 inline-block font-medium text-link underline"
                 (click)="closed.emit()"
               >
                 Revisar todos los datos
               </a>
             }
-          </div>
+          </ui-alert>
         }
         <ui-money-input
           label="Importe real"

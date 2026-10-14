@@ -19,6 +19,98 @@ const SIGNED_IN_PAGES = [
   { path: '/mas/ajustes', heading: 'Ajustes' },
 ];
 
+const THEMES = ['light', 'dark'] as const;
+type Theme = (typeof THEMES)[number];
+const THEME_STORAGE_KEY = 'finanzas.theme';
+
+async function expectTheme(page: Page, theme: Theme): Promise<void> {
+  const root = page.locator('html');
+  if (theme === 'dark') {
+    await expect(root).toHaveClass(/(^|\s)dark(\s|$)/);
+  } else {
+    await expect(root).not.toHaveClass(/(^|\s)dark(\s|$)/);
+  }
+}
+
+function madridToday(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Madrid',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+async function stubDraftForReview(page: Page): Promise<number> {
+  await page.goto('/');
+  const reference = await page.evaluate(async () => {
+    const headers = { Accept: 'application/json' };
+    const accounts = (await (await fetch('/api/v1/accounts', { headers })).json()) as {
+      data: { id: number; archived_at: string | null }[];
+    };
+    const categories = (await (
+      await fetch('/api/v1/categories?kind=expense', { headers })
+    ).json()) as { data: { id: number }[] };
+    return {
+      accountId: accounts.data.find((candidate) => candidate.archived_at === null)?.id ?? null,
+      categoryId: categories.data[0]?.id ?? null,
+    };
+  });
+  const draftId = 980_000 + Math.floor(Math.random() * 9_000);
+  const now = new Date().toISOString();
+  await page.route(new RegExp(`/api/v1/drafts/${draftId}$`), (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          id: draftId,
+          origin: 'voice',
+          status: 'pending',
+          proposal: {
+            type: 'expense',
+            amount_cents: 1250,
+            date: madridToday(),
+            account_id: reference.accountId,
+            to_account_id: null,
+            category_id: reference.categoryId,
+            description: 'Compra',
+            merchant: 'Mercadona',
+          },
+          confidence: { amount_cents: 0.95, category_id: 0.4, account_id: 0.95, date: 1 },
+          field_sources: {
+            type: 'ai',
+            amount_cents: 'ai',
+            date: 'default',
+            account_id: 'history',
+            category_id: 'ai',
+            description: 'ai',
+            merchant: 'ai',
+          },
+          low_confidence_fields: ['category_id'],
+          capture: {
+            id: `e2e-axe-capture-${draftId}`,
+            kind: 'voice',
+            status: 'completed',
+            transcript: 'Doce cincuenta en Mercadona',
+            error: null,
+            transcription_ms: 700,
+            extraction_ms: 1200,
+            attachments: [],
+            created_at: now,
+          },
+          recurring: null,
+          transaction_id: null,
+          transfer_id: null,
+          corrected_fields: null,
+          confirmed_at: null,
+          discarded_at: null,
+          created_at: now,
+        },
+      },
+    }),
+  );
+  return draftId;
+}
+
 async function submitLogin(page: Page, password = 'not-the-password'): Promise<void> {
   await page.getByRole('textbox', { name: 'Correo electrónico' }).fill(e2eCredentials().email);
   await page.getByRole('textbox', { name: 'Contraseña', exact: true }).fill(password);
@@ -183,18 +275,99 @@ test.describe('M8 accessibility', () => {
     expect(focusIndicator.outline !== 'none' || focusIndicator.shadow !== 'none').toBe(true);
   });
 
-  test.describe('signed in', () => {
-    test.use({ storageState: authenticatedStatePath, serviceWorkers: 'block' });
+  test.describe('dark theme controls', () => {
+    test.use({ colorScheme: 'dark' });
 
-    for (const { path, heading } of SIGNED_IN_PAGES) {
-      test(`${path} passes axe, labels icon buttons and has 44 px tap targets on touch`, async ({
+    test('a ticked checkbox is filled with the primary colour', async ({ page }) => {
+      await page.addInitScript(([key, value]) => window.localStorage.setItem(key, value), [
+        THEME_STORAGE_KEY,
+        'dark',
+      ] as const);
+      await page.goto('/login');
+      await expectTheme(page, 'dark');
+
+      const checkbox = page.getByRole('checkbox', { name: 'Recordarme' });
+      await expect(checkbox).toBeChecked();
+
+      const colours = await checkbox.evaluate((element) => {
+        const probe = document.createElement('span');
+        probe.style.backgroundColor = 'var(--primary)';
+        document.body.append(probe);
+        const primary = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return { fill: getComputedStyle(element).backgroundColor, primary };
+      });
+      expect(colours.fill).toBe(colours.primary);
+    });
+  });
+
+  for (const theme of THEMES) {
+    test.describe(`signed in, ${theme} theme`, () => {
+      test.use({
+        storageState: authenticatedStatePath,
+        serviceWorkers: 'block',
+        colorScheme: theme,
+      });
+
+      test.beforeEach(async ({ page }) => {
+        await page.addInitScript(([key, value]) => window.localStorage.setItem(key, value), [
+          THEME_STORAGE_KEY,
+          theme,
+        ] as const);
+      });
+
+      for (const { path, heading } of SIGNED_IN_PAGES) {
+        test(`${path} passes axe, labels icon buttons and has 44 px tap targets on touch`, async ({
+          page,
+          isMobile,
+        }) => {
+          await page.goto(path);
+          await expect(
+            page.getByRole('heading', { name: heading, exact: true }).first(),
+          ).toBeVisible();
+          await expectTheme(page, theme);
+          await page.waitForLoadState('networkidle');
+
+          expect(await axeViolations(page)).toEqual([]);
+          expect(await unlabelledControls(page)).toEqual([]);
+          if (isMobile) {
+            expect(await smallTapTargets(page)).toEqual([]);
+          }
+        });
+      }
+
+      test('the quick add sheet passes axe and has 44 px tap targets on touch', async ({
         page,
         isMobile,
       }) => {
-        await page.goto(path);
+        await page.goto('/movimientos');
+        await page
+          .getByRole('button', { name: 'Añadir movimiento' })
+          .filter({ visible: true })
+          .click();
+        const sheet = page.getByRole('dialog', { name: 'Nuevo movimiento' });
+        await expect(sheet.getByRole('button', { name: 'Guardar', exact: true })).toBeVisible();
+        await expect(sheet.getByRole('textbox', { name: 'Importe' })).not.toBeFocused();
+        await expectTheme(page, theme);
+
+        expect(await axeViolations(page)).toEqual([]);
+        expect(await unlabelledControls(page)).toEqual([]);
+        if (isMobile) {
+          expect(await smallTapTargets(page)).toEqual([]);
+        }
+      });
+
+      test('a draft review passes axe and has 44 px tap targets on touch', async ({
+        page,
+        isMobile,
+      }) => {
+        const draftId = await stubDraftForReview(page);
+        await page.goto(`/pendientes/${draftId}`);
         await expect(
-          page.getByRole('heading', { name: heading, exact: true }).first(),
+          page.getByRole('heading', { name: 'Revisar movimiento', exact: true }),
         ).toBeVisible();
+        await expect(page.locator('app-review-field').first()).toBeVisible();
+        await expectTheme(page, theme);
         await page.waitForLoadState('networkidle');
 
         expect(await axeViolations(page)).toEqual([]);
@@ -203,25 +376,6 @@ test.describe('M8 accessibility', () => {
           expect(await smallTapTargets(page)).toEqual([]);
         }
       });
-    }
-
-    test('the quick add sheet passes axe and has 44 px tap targets on touch', async ({
-      page,
-      isMobile,
-    }) => {
-      await page.goto('/movimientos');
-      await page
-        .getByRole('button', { name: 'Añadir movimiento' })
-        .filter({ visible: true })
-        .click();
-      const sheet = page.getByRole('dialog', { name: 'Nuevo movimiento' });
-      await expect(sheet.getByRole('textbox', { name: 'Importe' })).toBeFocused();
-
-      expect(await axeViolations(page)).toEqual([]);
-      expect(await unlabelledControls(page)).toEqual([]);
-      if (isMobile) {
-        expect(await smallTapTargets(page)).toEqual([]);
-      }
     });
-  });
+  }
 });

@@ -30,7 +30,7 @@ const SIZES: Record<UiButtonSize, { size: YuwButtonSize; shape: string }> = {
   icon: { size: 'icon', shape: 'size-11 px-0' },
 };
 
-const CAPSULE = 'rounded-capsule font-medium';
+const CAPSULE = 'rounded-capsule! font-medium';
 
 @Component({
   selector: 'ui-button',

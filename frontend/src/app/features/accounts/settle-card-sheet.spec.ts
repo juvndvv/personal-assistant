@@ -32,7 +32,10 @@ const SUGGESTION: SettlementSuggestion = {
   from_account_id: 9,
 };
 
-async function setup(suggestion: SettlementSuggestion = SUGGESTION) {
+async function setup(
+  suggestion: SettlementSuggestion = SUGGESTION,
+  configure: (api: { settlementSuggestion: ReturnType<typeof vi.fn> }) => void = () => undefined,
+) {
   const accountsApi = {
     settlementSuggestion: vi.fn(() => of(suggestion)),
     list: vi.fn(() =>
@@ -43,6 +46,7 @@ async function setup(suggestion: SettlementSuggestion = SUGGESTION) {
       ]),
     ),
   };
+  configure(accountsApi);
   const transfersApi = { create: vi.fn(() => of(aTransfer({ kind: 'card_settlement' }))) };
   const toast = { success: vi.fn(), error: vi.fn() };
   const view = await render(SettleCardSheet, {
@@ -124,5 +128,22 @@ describe('SettleCardSheet', () => {
     await user.click(screen.getByRole('button', { name: 'Liquidar' }));
 
     expect(await screen.findByText('La fecha es anterior a la apertura.')).toBeInTheDocument();
+  });
+
+  it('offers a retry when the suggested amount cannot be loaded', async () => {
+    const { accountsApi, user } = await setup(SUGGESTION, (api) =>
+      api.settlementSuggestion.mockReturnValueOnce(
+        throwError(() => new HttpErrorResponse({ status: 500 })),
+      ),
+    );
+
+    expect(await screen.findByText('No se pudo calcular el importe sugerido.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    expect(await screen.findByTestId('suggested-amount')).toHaveTextContent('400,00 €');
+    expect(accountsApi.settlementSuggestion).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText('No se pudo calcular el importe sugerido.')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /importe/i })).toHaveValue('400,00');
   });
 });

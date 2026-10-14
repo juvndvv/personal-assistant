@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/angular';
 import userEvent from '@testing-library/user-event';
 import { AppUpdates } from './app-updates';
 import { ConnectivityStatus } from './connectivity-status';
-import { PwaStatusBanner } from './pwa-status-banner';
+import { PwaStatusBanner, STATUS_BANNER_HEIGHT } from './pwa-status-banner';
 
 async function setup(
   options: { online?: boolean; updateReady?: boolean; reloadRequired?: boolean } = {},
@@ -18,13 +18,13 @@ async function setup(
     reload: vi.fn(),
     dismiss: vi.fn(),
   };
-  await render(PwaStatusBanner, {
+  const rendered = await render(PwaStatusBanner, {
     providers: [
       { provide: ConnectivityStatus, useValue: { online } },
       { provide: AppUpdates, useValue: appUpdates },
     ],
   });
-  return { online, updateReady, appUpdates, user: userEvent.setup() };
+  return { online, updateReady, appUpdates, rendered, user: userEvent.setup() };
 }
 
 describe('PwaStatusBanner', () => {
@@ -74,5 +74,28 @@ describe('PwaStatusBanner', () => {
 
     expect(appUpdates.reload).toHaveBeenCalledOnce();
     expect(appUpdates.dismiss).not.toHaveBeenCalled();
+  });
+
+  it('clears the status bar area with the topmost notice', async () => {
+    const { online } = await setup({ updateReady: true });
+    const safeAreaPadding = 'pt-[calc(env(safe-area-inset-top)+0.5rem)]';
+
+    expect(screen.getByTestId('update-banner')).toHaveClass(safeAreaPadding);
+
+    online.set(false);
+
+    expect(await screen.findByTestId('offline-banner')).toHaveClass(safeAreaPadding);
+    expect(screen.getByTestId('update-banner')).not.toHaveClass(safeAreaPadding);
+  });
+
+  it('publishes its height so sticky bars can sit below it', async () => {
+    const { rendered } = await setup({ online: false });
+    const rootStyle = document.documentElement.style;
+
+    expect(rootStyle.getPropertyValue(STATUS_BANNER_HEIGHT)).toMatch(/^\d+px$/);
+
+    rendered.fixture.destroy();
+
+    expect(rootStyle.getPropertyValue(STATUS_BANNER_HEIGHT)).toBe('');
   });
 });

@@ -283,6 +283,24 @@ async function stubCaptureApi(
   return stub;
 }
 
+const MEDIUM_BREAKPOINT_PX = 768;
+
+async function showOriginalCapture(page: Page): Promise<void> {
+  await expect(
+    page.getByRole('heading', { name: 'Revisar movimiento', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByTestId('capture-source')).toBeVisible();
+  if ((page.viewportSize()?.width ?? MEDIUM_BREAKPOINT_PX) >= MEDIUM_BREAKPOINT_PX) {
+    return;
+  }
+  const toggle = page.getByRole('button', { name: /captura original/ });
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') {
+    await toggle.click();
+  }
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+}
+
 function plusButton(page: Page) {
   return page.getByRole('button', { name: 'Añadir movimiento' }).filter({ visible: true });
 }
@@ -305,7 +323,7 @@ test.describe('M3 capture journey', () => {
     await page.goto('/movimientos');
     await plusButton(page).click();
     const sheet = quickAdd(page);
-    await expect(sheet.getByRole('textbox', { name: 'Importe' })).toBeFocused();
+    await expect(sheet.getByRole('textbox', { name: 'Importe' })).not.toBeFocused();
     await sheet.getByRole('button', { name: 'Voz' }).click();
     await expect(sheet.getByTestId('voice-recording')).toBeVisible();
     await sheet.getByRole('button', { name: 'Enviar audio' }).click();
@@ -348,6 +366,7 @@ test.describe('M3 capture journey', () => {
     await expect(page).toHaveURL(/\/pendientes\/\d+$/);
     expect(stub.uploads[0]?.kind).toBe('photo');
     expect(stub.uploads[0]?.contentType).toMatch(/^image\/(jpeg|png)$/);
+    await showOriginalCapture(page);
     await expect(page.getByRole('img', { name: 'Foto del ticket' })).toBeVisible();
 
     await page.goto('/movimientos');

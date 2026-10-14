@@ -35,12 +35,7 @@ export class UiToast {
 @Component({
   selector: 'ui-toaster',
   imports: [YuwToasterComponent],
-  template: `<yuw-toaster
-    position="top-center"
-    [closeButton]="true"
-    [richColors]="false"
-    [theme]="theme.resolved()"
-  />`,
+  template: `<yuw-toaster position="top-center" [richColors]="false" [theme]="theme.resolved()" />`,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UiToaster {

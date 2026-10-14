@@ -32,6 +32,7 @@ import {
   UiSheetFooter,
 } from '../../../shared/ui';
 import { LedgerReferenceData } from '../reference-data';
+import { ReferenceLoadAlert } from '../reference-load-alert';
 import { TRANSACTION_ORIGIN_LABELS, TRANSACTION_TYPE_LABELS } from '../transaction-display';
 import {
   ALL_PERIODS,
@@ -45,6 +46,7 @@ const CURRENT_PERIOD = '';
 @Component({
   selector: 'app-transaction-filter-sheet',
   imports: [
+    ReferenceLoadAlert,
     UiButton,
     UiCheckbox,
     UiDateInput,
@@ -55,12 +57,14 @@ const CURRENT_PERIOD = '';
     UiSheetFooter,
   ],
   template: `
-    <ui-sheet [(open)]="open" title="Filtros" side="right">
+    <ui-sheet [(open)]="open" title="Filtros">
       <div class="flex flex-col gap-6 pb-4">
+        <app-reference-load-alert />
         <section class="flex flex-col gap-3">
           <h3 class="text-sm font-semibold text-foreground">Fechas</h3>
           <ui-segmented
             ariaLabel="Tipo de fechas"
+            onGlass
             [options]="dateModes"
             [value]="dateMode()"
             (valueChange)="dateMode.set($event === 'range' ? 'range' : 'period')"
@@ -130,6 +134,7 @@ const CURRENT_PERIOD = '';
           } @else {
             <ui-segmented
               ariaLabel="Coincidencia de etiquetas"
+              onGlass
               [options]="tagModes"
               [value]="draft().tagMode"
               (valueChange)="patch({ tagMode: $event === 'all' ? 'all' : 'any' })"

@@ -4,19 +4,17 @@ import { lucideChevronLeft, lucideChevronRight } from '@ng-icons/lucide';
 import { Period, PeriodLabel } from '../../../core/api/models';
 import { formatDate } from '../../../core/date/iso-date';
 import { formatPeriodLabel } from '../../../core/date/period-label';
+import { UiCard, UiSkeleton } from '../../../shared/ui';
 
 @Component({
   selector: 'app-period-switcher',
-  imports: [NgIcon],
+  imports: [NgIcon, UiCard, UiSkeleton],
   providers: [provideIcons({ lucideChevronLeft, lucideChevronRight })],
   template: `
-    <nav
-      class="flex items-center gap-2 rounded-2xl border border-border bg-background p-2"
-      aria-label="Periodo"
-    >
+    <nav uiCard padding="none" class="flex items-center gap-1 p-1.5" aria-label="Periodo">
       <button
         type="button"
-        class="grid size-10 shrink-0 place-items-center rounded-xl text-foreground hover:bg-muted disabled:opacity-40"
+        class="grid size-11 shrink-0 place-items-center rounded-capsule text-foreground transition-colors duration-150 hover:bg-hover active:bg-pressed disabled:pointer-events-none disabled:text-disabled-foreground"
         aria-label="Periodo anterior"
         [disabled]="label() === null"
         (click)="previous.emit()"
@@ -24,15 +22,24 @@ import { formatPeriodLabel } from '../../../core/date/period-label';
         <ng-icon name="lucideChevronLeft" size="20" aria-hidden="true" />
       </button>
       <div class="min-w-0 flex-1 text-center" aria-live="polite">
-        <p class="font-semibold text-foreground first-letter:uppercase" data-testid="period-name">
-          {{ name() }}
+        @if (name(); as periodName) {
+          <p class="font-semibold text-foreground first-letter:uppercase" data-testid="period-name">
+            {{ periodName }}
+          </p>
+        } @else {
+          <p class="flex justify-center py-1" data-testid="period-name">
+            <span class="sr-only">Cargando periodo</span>
+            <ui-skeleton shape="title" width="9rem" />
+          </p>
+        }
+        <p class="text-xs text-muted-foreground tabular-nums" data-testid="period-range">
+          {{ range() }}
         </p>
-        <p class="text-xs text-muted-foreground" data-testid="period-range">{{ range() }}</p>
       </div>
       @if (!isCurrent() && label() !== null) {
         <button
           type="button"
-          class="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-primary-text hover:underline"
+          class="min-h-11 shrink-0 rounded-capsule px-3 text-sm font-medium text-link transition-colors duration-150 hover:bg-hover active:bg-pressed"
           (click)="current.emit()"
         >
           Ir al actual
@@ -40,7 +47,7 @@ import { formatPeriodLabel } from '../../../core/date/period-label';
       }
       <button
         type="button"
-        class="grid size-10 shrink-0 place-items-center rounded-xl text-foreground hover:bg-muted disabled:opacity-40"
+        class="grid size-11 shrink-0 place-items-center rounded-capsule text-foreground transition-colors duration-150 hover:bg-hover active:bg-pressed disabled:pointer-events-none disabled:text-disabled-foreground"
         aria-label="Periodo siguiente"
         [disabled]="!canGoNext()"
         (click)="next.emit()"
@@ -63,7 +70,7 @@ export class PeriodSwitcher {
 
   protected readonly name = computed(() => {
     const label = this.label();
-    return label === null ? 'Cargando periodo…' : formatPeriodLabel(label);
+    return label === null ? null : formatPeriodLabel(label);
   });
 
   protected readonly range = computed(() => {

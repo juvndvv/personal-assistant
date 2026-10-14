@@ -15,6 +15,7 @@ import { AccountType, Transfer, TransferInput, TransferKind } from '../../core/a
 import { TransfersApi } from '../../core/api/transfers.api';
 import { todayInMadrid } from '../../core/date/iso-date';
 import {
+  UiAlert,
   UiButton,
   UiDateInput,
   UiInput,
@@ -22,6 +23,7 @@ import {
   UiSelect,
   UiSheet,
   UiSheetFooter,
+  UiSkeleton,
   UiToast,
 } from '../../shared/ui';
 import { EntryErrors, entryErrorsFrom, optionalText } from '../transactions/entry-errors';
@@ -29,12 +31,15 @@ import { MovementActions } from '../transactions/movement-actions';
 import { MovementSheets, TransferRequest } from '../transactions/movement-sheets';
 import { ReceiptsGallery } from '../transactions/receipts/receipts-gallery';
 import { LedgerReferenceData } from '../transactions/reference-data';
+import { ReferenceLoadAlert } from '../transactions/reference-load-alert';
 import { transferKindBetween } from './transfer-kind';
 
 @Component({
   selector: 'app-transfer-form-sheet',
   imports: [
     ReceiptsGallery,
+    ReferenceLoadAlert,
+    UiAlert,
     UiButton,
     UiDateInput,
     UiInput,
@@ -42,6 +47,7 @@ import { transferKindBetween } from './transfer-kind';
     UiSelect,
     UiSheet,
     UiSheetFooter,
+    UiSkeleton,
   ],
   template: `
     <ui-sheet
@@ -50,15 +56,32 @@ import { transferKindBetween } from './transfer-kind';
       [title]="title()"
       description="Mueve dinero entre tus cuentas. No cuenta como gasto ni como ingreso."
     >
-      <form class="flex flex-col gap-5 pb-2" novalidate (submit)="submit($event)">
+      @if (loadFailure(); as message) {
+        <ui-alert class="mb-4" [retryable]="true" [retrying]="loading()" (retry)="reload()">
+          {{ message }}
+        </ui-alert>
+      }
+      @if (loading()) {
+        <div role="status" class="flex flex-col gap-5 pb-2" data-testid="transfer-skeleton">
+          <span class="sr-only">Cargando transferencia…</span>
+          @for (field of skeletonFields; track field) {
+            <div class="flex flex-col gap-2" aria-hidden="true">
+              <ui-skeleton width="5rem" />
+              <ui-skeleton shape="pill" width="100%" height="2.75rem" />
+            </div>
+          }
+        </div>
+      }
+      <form
+        class="flex flex-col gap-5 pb-2"
+        novalidate
+        [hidden]="!formReady()"
+        (submit)="submit($event)"
+      >
         @if (failure(); as message) {
-          <p role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {{ message }}
-          </p>
+          <ui-alert>{{ message }}</ui-alert>
         }
-        @if (loading()) {
-          <p class="text-sm text-muted-foreground">Cargando transferencia…</p>
-        }
+        <app-reference-load-alert />
         <ui-select
           label="Desde"
           name="from_account_id"
@@ -103,7 +126,12 @@ import { transferKindBetween } from './transfer-kind';
         </div>
       }
       <div uiSheetFooter class="flex flex-col gap-2">
-        <ui-button [fullWidth]="true" [loading]="saving()" (clicked)="submit($event)">
+        <ui-button
+          [fullWidth]="true"
+          [loading]="saving()"
+          [disabled]="!formReady()"
+          (clicked)="submit($event)"
+        >
           {{ editing() ? 'Guardar cambios' : 'Guardar transferencia' }}
         </ui-button>
         @if (editing()) {
@@ -132,11 +160,14 @@ export class TransferFormSheet {
   protected readonly saving = signal(false);
   protected readonly loading = signal(false);
   protected readonly failure = signal<string | null>(null);
+  protected readonly loadFailure = signal<string | null>(null);
+  protected readonly skeletonFields = ['from', 'to', 'amount', 'date', 'note'];
   private readonly existing = signal<Transfer | null>(null);
   private readonly serverErrors = signal<EntryErrors>({});
   private readonly attempted = signal(false);
 
   protected readonly editing = computed(() => this.request()?.transferId != null);
+  protected readonly formReady = computed(() => !this.loading() && this.loadFailure() === null);
   protected readonly outLegId = computed(() => this.existing()?.out_transaction_id ?? null);
   protected readonly title = computed(() => {
     if (!this.editing()) {
@@ -201,7 +232,7 @@ export class TransferFormSheet {
 
   protected async submit(event: Event): Promise<void> {
     event.preventDefault();
-    if (this.saving()) {
+    if (this.saving() || !this.formReady()) {
       return;
     }
     this.attempted.set(true);
@@ -293,6 +324,13 @@ export class TransferFormSheet {
     }
   }
 
+  protected reload(): void {
+    const transferId = this.request()?.transferId ?? null;
+    if (transferId !== null && !this.loading()) {
+      void this.load(transferId);
+    }
+  }
+
   private async prepare(request: TransferRequest): Promise<void> {
     this.existing.set(null);
     this.fromId.set(request.fromAccountId === null ? null : String(request.fromAccountId));
@@ -301,15 +339,20 @@ export class TransferFormSheet {
     this.date.set(todayInMadrid());
     this.note.set('');
     this.failure.set(null);
+    this.loadFailure.set(null);
     this.serverErrors.set({});
     this.attempted.set(false);
     void this.reference.ensureLoaded().catch(() => undefined);
-    if (request.transferId === null) {
-      return;
+    if (request.transferId !== null) {
+      await this.load(request.transferId);
     }
+  }
+
+  private async load(transferId: number): Promise<void> {
     this.loading.set(true);
+    this.loadFailure.set(null);
     try {
-      const transfer = await firstValueFrom(this.api.get(request.transferId));
+      const transfer = await firstValueFrom(this.api.get(transferId));
       this.existing.set(transfer);
       this.fromId.set(String(transfer.from_account.id));
       this.toId.set(String(transfer.to_account.id));
@@ -317,7 +360,7 @@ export class TransferFormSheet {
       this.date.set(transfer.date);
       this.note.set(transfer.note ?? '');
     } catch (error: unknown) {
-      this.failure.set(serverMessage(error) ?? 'No se pudo cargar la transferencia.');
+      this.loadFailure.set(serverMessage(error) ?? 'No se pudo cargar la transferencia.');
     } finally {
       this.loading.set(false);
     }

@@ -43,12 +43,12 @@ const CREATE_PREFIX = 'create:';
         <ul class="flex flex-wrap gap-2" [attr.aria-label]="label()">
           @for (tag of tags(); track tag) {
             <li
-              class="inline-flex items-center gap-1 rounded-full bg-primary/10 py-1 ps-3 pe-1 text-sm text-primary-text"
+              class="inline-flex items-center gap-1 rounded-capsule bg-fill-on-card py-1 ps-3 pe-1 text-sm font-medium text-foreground"
             >
               {{ tag }}
               <button
                 type="button"
-                class="inline-flex size-6 items-center justify-center rounded-full hover:bg-primary/20"
+                class="inline-flex size-7 items-center justify-center rounded-capsule text-muted-foreground transition-colors duration-150 hover:bg-hover"
                 [attr.aria-label]="'Quitar etiqueta ' + tag"
                 (click)="remove(tag)"
               >

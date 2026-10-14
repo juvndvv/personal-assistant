@@ -79,7 +79,7 @@ describe('KitchenSinkPage (design system)', () => {
 
     for (const testId of ['showcase-light', 'showcase-dark']) {
       const panel = within(screen.getByTestId(testId));
-      expect(panel.getAllByRole('alert')).toHaveLength(2);
+      expect(panel.getAllByRole('alert')).toHaveLength(1);
       expect(panel.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
       expect(panel.getByText('Cargando ejemplo')).toBeInTheDocument();
       expect(panel.getByText(/^\+1\.?850,00/)).toBeInTheDocument();

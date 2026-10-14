@@ -40,4 +40,38 @@ describe('PageHeader', () => {
 
     expect(chrome.state()).toBeNull();
   });
+
+  it('hides the large title only once it scrolls under the measured top bar', async () => {
+    const topBar = document.createElement('ui-glass-bar');
+    topBar.setAttribute('data-position', 'top');
+    vi.spyOn(topBar, 'getBoundingClientRect').mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 0, width: 390, height: 103 }),
+    );
+    document.body.append(topBar);
+    const rootMargins: (string | undefined)[] = [];
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(_callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+          rootMargins.push(options?.rootMargin);
+        }
+        observe(): void {
+          return undefined;
+        }
+        disconnect(): void {
+          return undefined;
+        }
+      },
+    );
+
+    await render(`<app-page-header title="Pendientes" />`, {
+      imports: [PageHeader],
+      providers: [provideRouter([])],
+    });
+
+    expect(rootMargins).toEqual(['-103px 0px 0px 0px']);
+    topBar.remove();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
 });

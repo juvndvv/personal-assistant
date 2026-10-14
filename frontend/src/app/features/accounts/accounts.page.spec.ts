@@ -1,7 +1,7 @@
 import { provideRouter } from '@angular/router';
 import { render, screen, within } from '@testing-library/angular';
 import userEvent from '@testing-library/user-event';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { AccountsApi } from '../../core/api/accounts.api';
 import { Account } from '../../core/api/models';
 import { AccountsPage } from './accounts.page';
@@ -37,6 +37,12 @@ async function setup(accounts: Account[] = active) {
 }
 
 describe('AccountsPage', () => {
+  it('links back to the more menu', async () => {
+    await setup();
+
+    expect(screen.getByRole('link', { name: 'Más' })).toHaveAttribute('href', '/mas');
+  });
+
   it('groups accounts by type in a stable order', async () => {
     await setup();
 
@@ -48,19 +54,44 @@ describe('AccountsPage', () => {
     ]);
   });
 
-  it('shows balances, negatives in red, last update and the stale badge', async () => {
+  it('shows balances, card debt in neutral, last update and the stale badge', async () => {
     await setup();
 
     const visa = await screen.findByTestId('account-row-2');
     const balance = within(visa).getByText('-45,23 €');
-    expect(balance).toHaveClass('text-destructive');
+    expect(balance).toHaveClass('text-foreground');
+    expect(within(visa).getByText('Deuda')).toBeInTheDocument();
 
     const cash = screen.getByTestId('account-row-3');
     expect(within(cash).getByText('Desactualizada')).toBeInTheDocument();
     expect(within(cash).getByText('Actualizada el 1 ago 2026')).toBeInTheDocument();
     expect(within(screen.getByTestId('account-row-1')).getByText('2.345,67 €')).not.toHaveClass(
-      'text-destructive',
+      'text-danger-text',
     );
+  });
+
+  it('highlights an overdrawn account', async () => {
+    await setup([anAccount({ id: 5, name: 'Descubierto', type: 'checking', balance_cents: -100 })]);
+
+    const row = await screen.findByTestId('account-row-5');
+    expect(within(row).getByText('-1,00 €')).toHaveClass('text-danger-text');
+  });
+
+  it('offers a retry when the accounts fail to load', async () => {
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(throwError(() => new Error('offline')))
+      .mockReturnValue(of(active));
+    await render(AccountsPage, {
+      providers: [provideRouter([]), { provide: AccountsApi, useValue: { list } }],
+    });
+    const user = userEvent.setup();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron cargar las cuentas');
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    expect(await screen.findByText('BBVA')).toBeInTheDocument();
+    expect(list).toHaveBeenCalledTimes(2);
   });
 
   it('lists archived accounts only when asked', async () => {

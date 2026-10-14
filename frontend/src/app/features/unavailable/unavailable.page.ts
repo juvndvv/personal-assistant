@@ -10,19 +10,19 @@ import { UiButton } from '../../shared/ui';
   selector: 'app-unavailable-page',
   imports: [NgIcon, UiButton],
   providers: [provideIcons({ lucideCloudOff, lucideWifiOff })],
-  host: { class: 'block min-h-dvh bg-muted/40' },
+  host: { class: 'block min-h-dvh bg-grouped' },
   template: `
     <main
       class="mx-auto flex min-h-dvh w-full max-w-sm flex-col items-center justify-center gap-4 px-6 py-12 text-center"
     >
-      <ng-icon
-        [name]="connectivity.online() ? 'lucideCloudOff' : 'lucideWifiOff'"
-        size="40"
-        class="text-muted-foreground"
+      <span
+        class="flex size-16 items-center justify-center rounded-full bg-muted text-muted-foreground"
         aria-hidden="true"
-      />
+      >
+        <ng-icon [name]="connectivity.online() ? 'lucideCloudOff' : 'lucideWifiOff'" size="32" />
+      </span>
       <h1 class="text-2xl font-semibold text-foreground">{{ heading() }}</h1>
-      <p role="status" class="text-sm text-muted-foreground">{{ explanation() }}</p>
+      <p role="status" class="text-muted-foreground">{{ explanation() }}</p>
       <ui-button size="lg" [fullWidth]="true" [loading]="retrying()" (clicked)="retry()">
         Reintentar
       </ui-button>

@@ -12,7 +12,7 @@ import { YuwEmptyImports } from 'yukit-web';
           <div
             yuwEmptyMedia
             variant="icon"
-            class="size-12 rounded-full bg-muted text-muted-foreground"
+            class="size-12 rounded-full bg-fill-on-card text-muted-foreground"
           >
             <ng-icon [name]="iconName" size="24" />
           </div>

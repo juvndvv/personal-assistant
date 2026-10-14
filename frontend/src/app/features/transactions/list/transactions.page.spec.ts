@@ -3,10 +3,10 @@ import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { screen, within } from '@testing-library/angular';
 import userEvent from '@testing-library/user-event';
-import { of } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 import { AccountsApi } from '../../../core/api/accounts.api';
 import { CategoriesApi } from '../../../core/api/categories.api';
-import { Period } from '../../../core/api/models';
+import { Period, TransactionPage } from '../../../core/api/models';
 import { PeriodsApi } from '../../../core/api/periods.api';
 import { TagsApi } from '../../../core/api/tags.api';
 import { TransactionsApi } from '../../../core/api/transactions.api';
@@ -26,26 +26,29 @@ const PERIODS: Period[] = [
   { label: '2026-10', start: '2026-09-25', end: '2026-10-24', month_start_day: 25 },
 ];
 
-async function setup(url = '/movimientos') {
+async function setup(url = '/movimientos', pendingFirstPage = false) {
+  const firstPage = new Subject<TransactionPage>();
   const transactionsApi = {
-    list: vi.fn(() =>
-      of(
-        aPage(
-          [
-            aTransaction({ id: 1, description: 'Café', date: '2026-10-12' }),
-            aTransferLeg({ id: 2, date: '2026-10-12' }),
-            aTransaction({
-              id: 3,
-              description: 'Nómina',
-              type: 'income',
-              date: '2026-10-01',
-              signed_amount_cents: 200000,
-              amount_cents: 200000,
-            }),
-          ],
-          { totals: { income_cents: 200000, expense_cents: 2350 } },
-        ),
-      ),
+    list: vi.fn((): Observable<TransactionPage> =>
+      pendingFirstPage
+        ? firstPage
+        : of(
+            aPage(
+              [
+                aTransaction({ id: 1, description: 'Café', date: '2026-10-12' }),
+                aTransferLeg({ id: 2, date: '2026-10-12' }),
+                aTransaction({
+                  id: 3,
+                  description: 'Nómina',
+                  type: 'income',
+                  date: '2026-10-01',
+                  signed_amount_cents: 200000,
+                  amount_cents: 200000,
+                }),
+              ],
+              { totals: { income_cents: 200000, expense_cents: 2350 } },
+            ),
+          ),
     ),
     delete: vi.fn(() => of(undefined)),
     restore: vi.fn(() => of(aTransaction())),
@@ -76,7 +79,15 @@ async function setup(url = '/movimientos') {
   await harness.navigateByUrl(url, TransactionsPage);
   harness.detectChanges();
   const router = TestBed.inject(Router);
-  return { transactionsApi, transfersApi, toast, router, harness, user: userEvent.setup() };
+  return {
+    transactionsApi,
+    transfersApi,
+    toast,
+    router,
+    harness,
+    firstPage,
+    user: userEvent.setup(),
+  };
 }
 
 function lastQuery(list: ReturnType<typeof vi.fn>): unknown {
@@ -84,13 +95,49 @@ function lastQuery(list: ReturnType<typeof vi.fn>): unknown {
 }
 
 describe('TransactionsPage', () => {
+  it('shows skeleton totals until the first page arrives', async () => {
+    await setup('/movimientos', true);
+
+    expect(screen.queryByTestId('total-income')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('total-expense')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('region', { name: 'Totales' }).querySelectorAll('ui-skeleton'),
+    ).toHaveLength(2);
+  });
+
+  it('keeps a zero income neutral', async () => {
+    const { firstPage, harness } = await setup('/movimientos', true);
+    firstPage.next(aPage([aTransaction()], { totals: { income_cents: 0, expense_cents: 2350 } }));
+    harness.detectChanges();
+
+    const income = await screen.findByTestId('total-income');
+    expect(income).toHaveTextContent('0,00 €');
+    expect(income).not.toHaveTextContent('+');
+    expect(income).not.toHaveClass('text-income');
+  });
+
+  it('shows a dash instead of totals when the movements fail to load', async () => {
+    const { transactionsApi, harness } = await setup();
+    await screen.findByText('Café');
+    transactionsApi.list.mockReturnValueOnce(throwError(() => new Error('offline')));
+    TestBed.inject(MovementSheets).notifyChanged();
+    harness.detectChanges();
+
+    await screen.findByRole('button', { name: 'Reintentar' });
+    expect(screen.getByTestId('total-income')).toHaveTextContent('—');
+    expect(screen.getByTestId('total-income')).not.toHaveClass('text-income');
+    expect(screen.getByTestId('total-expense')).toHaveTextContent('—');
+  });
+
   it('lists the current period grouped by date with its totals', async () => {
     const { transactionsApi } = await setup();
 
     expect(await screen.findByText('Café')).toBeInTheDocument();
     expect(lastQuery(transactionsApi.list)).toEqual({ period: '2026-10', page: 1, per_page: 50 });
-    expect(screen.getByTestId('total-income')).toHaveTextContent('2.000,00 €');
+    expect(screen.getByTestId('total-income')).toHaveTextContent('+2.000,00 €');
+    expect(screen.getByTestId('total-income')).toHaveClass('amount', 'text-income');
     expect(screen.getByTestId('total-expense')).toHaveTextContent('23,50 €');
+    expect(screen.getByTestId('total-expense')).toHaveClass('amount', 'text-expense');
     expect(screen.getByTestId('list-scope')).toHaveTextContent(
       'Periodo octubre de 2026: del 25 sept 2026 al 24 oct 2026',
     );
@@ -100,6 +147,13 @@ describe('TransactionsPage', () => {
         .map((header) => header.querySelector('span')?.textContent?.trim()),
     ).toEqual(['12 de octubre de 2026', '1 de octubre de 2026']);
     expect(screen.getByText('BBVA → Ahorro')).toBeInTheDocument();
+  });
+
+  it('leaves adding movements to the shell instead of a second floating button', async () => {
+    await setup();
+
+    await screen.findByText('Café');
+    expect(screen.queryByRole('button', { name: 'Nuevo movimiento' })).not.toBeInTheDocument();
   });
 
   it('reads every filter from the URL', async () => {

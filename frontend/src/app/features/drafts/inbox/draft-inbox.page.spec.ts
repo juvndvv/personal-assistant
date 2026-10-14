@@ -1,7 +1,8 @@
 import { Component, signal } from '@angular/core';
 import { Router, provideRouter } from '@angular/router';
 import { render, screen, within } from '@testing-library/angular';
-import { of } from 'rxjs';
+import userEvent from '@testing-library/user-event';
+import { of, throwError } from 'rxjs';
 import { DraftsApi } from '../../../core/api/drafts.api';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { AppUpdates } from '../../../core/pwa/app-updates';
@@ -13,6 +14,18 @@ import { DraftInboxPage } from './draft-inbox.page';
 class BlankPage {}
 
 describe('Pending drafts', () => {
+  it('links back to movements', async () => {
+    const api = { list: vi.fn(() => of(aDraftPage([]))), get: vi.fn(), discard: vi.fn() };
+    await render(DraftInboxPage, {
+      providers: [provideRouter([]), { provide: DraftsApi, useValue: api }],
+    });
+
+    expect(screen.getByRole('link', { name: 'Movimientos' })).toHaveAttribute(
+      'href',
+      '/movimientos',
+    );
+  });
+
   it('lists pending drafts with amount, origin and review hints', async () => {
     const drafts = [
       aDraft({ id: 88, low_confidence_fields: ['category_id', 'date'] }),
@@ -38,6 +51,33 @@ describe('Pending drafts', () => {
     expect(rows[1]).toHaveTextContent('Sin descripción');
     expect(rows[1]).toHaveTextContent('Sin analizar');
     expect(api.list).toHaveBeenCalledWith({ status: 'pending', page: 1, per_page: 50 });
+  });
+
+  it('offers a retry when the pending drafts fail to load', async () => {
+    let failNextPage = true;
+    const api = {
+      list: vi.fn((query: { page?: number }) => {
+        if (query.page !== undefined && failNextPage) {
+          failNextPage = false;
+          return throwError(() => new Error('offline'));
+        }
+        return of(aDraftPage([aDraft({ id: 88 })]));
+      }),
+      get: vi.fn(),
+      discard: vi.fn(),
+    };
+    await render(DraftInboxPage, {
+      providers: [provideRouter([]), { provide: DraftsApi, useValue: api }],
+    });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('No se pudieron cargar los pendientes.');
+    expect(screen.queryByText('No hay borradores pendientes')).not.toBeInTheDocument();
+
+    await userEvent.setup().click(within(alert).getByRole('button', { name: 'Reintentar' }));
+
+    expect(await screen.findAllByTestId('draft-row')).toHaveLength(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('shows an empty state when nothing is pending', async () => {

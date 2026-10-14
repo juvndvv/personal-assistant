@@ -1,11 +1,15 @@
 import { render, screen } from '@testing-library/angular';
-import { of } from 'rxjs';
+import userEvent from '@testing-library/user-event';
+import { NEVER, Observable, of, throwError } from 'rxjs';
+import { CaptureMetrics } from '../../core/api/models';
 import { ReportsApi } from '../../core/api/reports.api';
 import { CaptureQualityPanel } from './capture-quality-panel';
 import { aCaptureMetrics } from './testing/report-fixtures';
 
 async function setup(metrics = aCaptureMetrics()) {
-  const api = { captureMetrics: vi.fn(() => of(metrics)) };
+  const api = {
+    captureMetrics: vi.fn((): Observable<CaptureMetrics> => of(metrics)),
+  };
   await render(CaptureQualityPanel, {
     inputs: { period: '2026-10' },
     providers: [{ provide: ReportsApi, useValue: api }],
@@ -75,5 +79,36 @@ describe('CaptureQualityPanel', () => {
       'Objetivo: 5 de 7 días o más',
     );
     expect(screen.getByTestId('capture-active-days')).toHaveTextContent('—');
+  });
+  it('shows skeleton tiles while the metrics load', async () => {
+    const api = { captureMetrics: vi.fn(() => NEVER) };
+    await render(CaptureQualityPanel, {
+      inputs: { period: '2026-10' },
+      providers: [{ provide: ReportsApi, useValue: api }],
+    });
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Cargando métricas de captura');
+  });
+
+  it('retries the metrics after a failure', async () => {
+    const metrics = aCaptureMetrics();
+    const api = {
+      captureMetrics: vi.fn((): Observable<CaptureMetrics> =>
+        throwError(() => new Error('offline')),
+      ),
+    };
+    const view = await render(CaptureQualityPanel, {
+      inputs: { period: '2026-10' },
+      providers: [{ provide: ReportsApi, useValue: api }],
+    });
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('No se pudieron cargar las métricas de captura.');
+
+    api.captureMetrics.mockReturnValue(of(metrics));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+    view.detectChanges();
+
+    expect(await screen.findByTestId('captures-confirmed')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

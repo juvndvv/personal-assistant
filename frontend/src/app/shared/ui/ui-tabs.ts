@@ -26,7 +26,7 @@ export interface UiTabItem {
       @if (activeIndex() >= 0) {
         <span
           aria-hidden="true"
-          class="segment-indicator pointer-events-none absolute inset-y-1 start-1 rounded-capsule bg-card shadow-sm transition-transform duration-[350ms] ease-spring dark:bg-fill-strong"
+          class="segment-indicator pointer-events-none absolute inset-y-1 start-1 rounded-capsule bg-segment-indicator shadow-sm ring-1 ring-segment-indicator-edge ring-inset transition-transform duration-[350ms] ease-spring"
         ></span>
       }
       @for (tab of tabs(); track tab.id) {
@@ -37,7 +37,7 @@ export interface UiTabItem {
           [attr.aria-selected]="tab.id === active()"
           [attr.aria-controls]="panelId() ?? null"
           [tabIndex]="tab.id === active() ? 0 : -1"
-          class="relative min-h-10 rounded-capsule px-4 text-sm whitespace-nowrap transition-colors duration-150"
+          class="relative min-h-11 rounded-capsule px-4 text-sm whitespace-nowrap transition-colors duration-150"
           [class]="
             tab.id === active()
               ? 'font-semibold text-foreground'

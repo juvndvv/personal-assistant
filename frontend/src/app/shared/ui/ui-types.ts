@@ -13,3 +13,9 @@ export const FIELD_SIZE: Record<UiSize, 'sm' | 'default' | 'lg'> = {
   md: 'default',
   lg: 'lg',
 };
+
+export const FIELD_STATE_CLASS: Record<UiState, string> = {
+  default: 'border-input focus-visible:border-ring focus-visible:ring-ring/50',
+  warning: 'border-warning focus-visible:border-ring focus-visible:ring-warning/50',
+  error: 'border-destructive focus-visible:border-ring focus-visible:ring-destructive/50',
+};

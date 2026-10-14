@@ -1,6 +1,9 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -24,23 +27,37 @@ import { TransactionsApi } from '../../../core/api/transactions.api';
 import { TransfersApi } from '../../../core/api/transfers.api';
 import { todayInMadrid } from '../../../core/date/iso-date';
 import { formatCents } from '../../../core/money/format-cents';
+import { mediaQuerySignal } from '../../../core/theme/media-query';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import {
+  lucideCamera,
+  lucideChevronDown,
+  lucideMic,
+  lucideRepeat,
+  lucideTriangleAlert,
+} from '@ng-icons/lucide';
 import { PageHeader } from '../../../shared/layout/page-header';
 import {
+  UiAlert,
   UiButton,
+  UiCard,
   UiDateInput,
   UiInput,
   UiMoneyInput,
   UiSegmented,
+  UiGlassBar,
   UiSelect,
+  UiSkeleton,
   UiState,
   UiToast,
 } from '../../../shared/ui';
 import { EntryErrors, entryErrorsFrom, optionalText } from '../../transactions/entry-errors';
 import { MovementSheets } from '../../transactions/movement-sheets';
 import { LedgerReferenceData } from '../../transactions/reference-data';
+import { ReferenceLoadAlert } from '../../transactions/reference-load-alert';
 import { TagInput } from '../../transactions/tag-input/tag-input';
 import { transferKindBetween } from '../../transfers/transfer-kind';
-import { DRAFT_NOT_PENDING_MESSAGE, DRAFT_ORIGIN_LABEL } from '../draft-display';
+import { DRAFT_NOT_PENDING_MESSAGE, DRAFT_ORIGIN_ICON, DRAFT_ORIGIN_LABEL } from '../draft-display';
 import { PendingDrafts } from '../pending-drafts';
 import { ReviewField } from './review-field';
 
@@ -49,6 +66,14 @@ const TYPE_OPTIONS = [
   { value: 'income', label: 'Ingreso' },
   { value: 'transfer', label: 'Transferencia' },
 ];
+
+const COMPACT_TYPE_OPTIONS = TYPE_OPTIONS.map((option) =>
+  option.value === 'transfer' ? { ...option, label: 'Transf.' } : option,
+);
+
+const ROOMY_SEGMENTS_QUERY = '(min-width: 480px)';
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+const FIRST_PROBLEM_SELECTOR = '[data-testid="review-failure"], [aria-invalid="true"]';
 
 const DESCRIPTION_MAX = 255;
 const MERCHANT_MAX = 120;
@@ -94,60 +119,161 @@ function prefillFrom(draft: Draft): Prefill {
 @Component({
   selector: 'app-draft-review-page',
   imports: [
+    NgIcon,
     PageHeader,
+    ReferenceLoadAlert,
     ReviewField,
     RouterLink,
     TagInput,
+    UiAlert,
     UiButton,
+    UiCard,
     UiDateInput,
+    UiGlassBar,
     UiInput,
     UiMoneyInput,
     UiSegmented,
     UiSelect,
+    UiSkeleton,
+  ],
+  providers: [
+    provideIcons({
+      lucideCamera,
+      lucideChevronDown,
+      lucideMic,
+      lucideRepeat,
+      lucideTriangleAlert,
+    }),
   ],
   template: `
-    <app-page-header title="Revisar movimiento" [subtitle]="subtitle()" />
+    <app-page-header
+      title="Revisar movimiento"
+      [subtitle]="subtitle()"
+      backLink="/pendientes"
+      backLabel="Pendientes"
+    />
+    <p role="alert" class="sr-only" data-testid="capture-failed-announcer">
+      {{ captureAnnouncement() }}
+    </p>
 
     @if (loadFailure(); as message) {
-      <p role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-        {{ message }}
-      </p>
-      <a routerLink="/pendientes" class="mt-4 inline-block text-sm font-medium text-primary-text">
+      <ui-alert retryable [retrying]="loading()" (retry)="reload()">{{ message }}</ui-alert>
+      <a
+        routerLink="/pendientes"
+        class="mt-4 inline-flex min-h-11 items-center font-medium text-link"
+      >
         Volver a pendientes
       </a>
     } @else if (draft(); as current) {
       @if (current.status !== 'pending') {
-        <p role="status" class="rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
-          {{ notPendingMessage }}
-        </p>
-        <a routerLink="/pendientes" class="mt-4 inline-block text-sm font-medium text-primary-text">
+        <ui-alert tone="info">{{ notPendingMessage }}</ui-alert>
+        <a
+          routerLink="/pendientes"
+          class="mt-4 inline-flex min-h-11 items-center font-medium text-link"
+        >
           Volver a pendientes
         </a>
       } @else {
-        <div class="grid gap-6 md:grid-cols-[minmax(0,1fr)_18rem]">
+        <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_20rem] md:gap-6">
+          @if (current.capture; as capture) {
+            <aside
+              class="flex flex-col gap-3 md:order-last md:gap-4"
+              aria-label="Captura original"
+              data-testid="capture-source"
+            >
+              <button
+                type="button"
+                class="flex min-h-11 items-center justify-between gap-3 rounded-card bg-muted px-4 py-2 text-start text-[0.9375rem] font-medium text-foreground transition-colors duration-150 hover:bg-hover md:hidden"
+                aria-controls="capture-source-content"
+                [attr.aria-expanded]="sourceOpen()"
+                (click)="sourceOpen.update((open) => !open)"
+              >
+                <span class="flex min-w-0 items-center gap-2">
+                  <ng-icon [name]="sourceIcon()" size="18" aria-hidden="true" />
+                  <span class="truncate">{{
+                    sourceOpen() ? 'Ocultar captura original' : 'Ver captura original'
+                  }}</span>
+                </span>
+                <ng-icon
+                  name="lucideChevronDown"
+                  aria-hidden="true"
+                  class="shrink-0 transition-transform duration-150"
+                  [class.rotate-180]="sourceOpen()"
+                />
+              </button>
+              <div
+                id="capture-source-content"
+                class="flex-col gap-3 md:flex md:gap-4"
+                [class.hidden]="!sourceOpen()"
+                [class.flex]="sourceOpen()"
+              >
+                @if (capture.transcript) {
+                  <figure uiCard>
+                    <figcaption class="mb-2 text-sm font-medium text-muted-foreground">
+                      Transcripción
+                    </figcaption>
+                    <blockquote class="text-foreground" data-testid="draft-transcript">
+                      “{{ capture.transcript }}”
+                    </blockquote>
+                  </figure>
+                }
+                @for (file of capture.attachments; track file.id) {
+                  <div uiCard padding="sm">
+                    @if (file.kind === 'image') {
+                      <a [href]="file.url" target="_blank" rel="noopener">
+                        <img
+                          [src]="file.url"
+                          alt="Foto del ticket"
+                          class="max-h-80 w-full rounded-sm bg-muted object-contain"
+                          data-testid="draft-photo"
+                        />
+                      </a>
+                    } @else {
+                      <audio
+                        controls
+                        preload="none"
+                        class="w-full"
+                        [src]="file.url"
+                        data-testid="draft-audio"
+                      >
+                        <track kind="captions" />
+                      </audio>
+                    }
+                  </div>
+                }
+              </div>
+            </aside>
+          }
+
           <form
-            class="flex flex-col gap-5 rounded-2xl border border-border bg-background p-4"
+            uiCard
+            class="flex flex-col gap-5"
             novalidate
             aria-label="Borrador del movimiento"
             (submit)="confirm($event)"
           >
             @if (captureFailed()) {
+              <ui-alert tone="warning" data-testid="capture-failed">{{ failedMessage }}</ui-alert>
+            }
+            @if (flaggedCount() > 0) {
               <p
-                role="alert"
-                class="rounded-lg bg-warning/15 px-3 py-2 text-sm text-foreground"
-                data-testid="capture-failed"
+                class="flex items-center gap-2 text-sm text-warning-text"
+                data-testid="review-hint"
               >
-                {{ failedMessage }}
+                <ng-icon name="lucideTriangleAlert" size="16" aria-hidden="true" />
+                {{
+                  flaggedCount() === 1
+                    ? '1 dato marcado para revisar'
+                    : flaggedCount() + ' datos marcados para revisar'
+                }}
               </p>
             }
             @if (failure(); as message) {
-              <p
-                role="alert"
-                class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
-              >
-                {{ message }}
-              </p>
+              <ui-alert tabindex="-1" class="outline-none" data-testid="review-failure">{{
+                message
+              }}</ui-alert>
             }
+            <app-reference-load-alert />
 
             <app-review-field
               field="type"
@@ -156,7 +282,7 @@ function prefillFrom(draft: Draft): Prefill {
             >
               <ui-segmented
                 ariaLabel="Tipo de movimiento"
-                [options]="typeOptions"
+                [options]="typeOptions()"
                 [value]="type()"
                 (valueChange)="changeType($event)"
               />
@@ -280,68 +406,58 @@ function prefillFrom(draft: Draft): Prefill {
               </app-review-field>
               <app-tag-input [(tags)]="tags" />
               @if (errors().tags; as message) {
-                <p role="alert" class="text-xs text-destructive">{{ message }}</p>
+                <p role="alert" class="text-sm text-danger-text">{{ message }}</p>
               }
             }
-
-            <div class="flex flex-col gap-2 pt-2 sm:flex-row-reverse">
-              <ui-button size="lg" [loading]="saving()" (clicked)="confirm($event)">
-                Confirmar
-              </ui-button>
-              <ui-button
-                variant="ghost"
-                size="lg"
-                [disabled]="saving()"
-                [loading]="discarding()"
-                (clicked)="discard()"
-              >
-                Descartar
-              </ui-button>
-            </div>
           </form>
-
-          <aside class="flex flex-col gap-4" aria-label="Captura original">
-            @if (current.capture; as capture) {
-              @if (capture.transcript) {
-                <figure class="rounded-2xl border border-border bg-background p-4">
-                  <figcaption class="mb-2 text-xs font-medium text-muted-foreground">
-                    Transcripción
-                  </figcaption>
-                  <blockquote class="text-sm text-foreground" data-testid="draft-transcript">
-                    “{{ capture.transcript }}”
-                  </blockquote>
-                </figure>
-              }
-              @for (file of capture.attachments; track file.id) {
-                <div class="rounded-2xl border border-border bg-background p-3">
-                  @if (file.kind === 'image') {
-                    <a [href]="file.url" target="_blank" rel="noopener">
-                      <img
-                        [src]="file.url"
-                        alt="Foto del ticket"
-                        class="max-h-80 w-full rounded-xl bg-muted object-contain"
-                        data-testid="draft-photo"
-                      />
-                    </a>
-                  } @else {
-                    <audio
-                      controls
-                      preload="none"
-                      class="w-full"
-                      [src]="file.url"
-                      data-testid="draft-audio"
-                    >
-                      <track kind="captions" />
-                    </audio>
-                  }
-                </div>
-              }
-            }
-          </aside>
         </div>
+
+        <div
+          class="h-[calc(var(--bottom-bar-block-size)+0.5rem)] md:hidden"
+          aria-hidden="true"
+        ></div>
+        <ui-glass-bar
+          position="bottom"
+          floating
+          [sticky]="false"
+          class="fixed inset-x-4 bottom-[calc(var(--tab-bar-offset)+var(--tab-bar-height)+0.5rem)] mx-auto! mb-0! max-w-md rounded-capsule! [background:var(--glass-specular),var(--glass-menu)]! md:sticky md:inset-x-auto md:bottom-[calc(env(safe-area-inset-bottom)+1rem)] md:mt-6 md:max-w-none"
+          data-testid="review-actions"
+        >
+          <ui-button
+            variant="ghost"
+            size="lg"
+            [disabled]="saving()"
+            [loading]="discarding()"
+            (clicked)="discard()"
+          >
+            Descartar
+          </ui-button>
+          <ui-button
+            class="min-w-0 flex-1"
+            [fullWidth]="true"
+            size="lg"
+            [loading]="saving()"
+            (clicked)="confirm($event)"
+          >
+            Confirmar
+          </ui-button>
+        </ui-glass-bar>
       }
     } @else {
-      <p class="text-sm text-muted-foreground" role="status">Cargando borrador…</p>
+      <div role="status" aria-live="polite" class="grid gap-4 md:grid-cols-[minmax(0,1fr)_20rem]">
+        <span class="sr-only">Cargando borrador</span>
+        <ui-card class="flex flex-col gap-5">
+          <ui-skeleton shape="pill" width="100%" />
+          <ui-skeleton shape="amount" width="10rem" height="2.5rem" />
+          @for (field of skeletonFields; track field) {
+            <div class="flex flex-col gap-2">
+              <ui-skeleton width="5rem" />
+              <ui-skeleton shape="block" height="2.75rem" />
+            </div>
+          }
+        </ui-card>
+        <ui-skeleton shape="block" class="hidden md:block" height="8rem" />
+      </div>
     }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -355,17 +471,27 @@ export class DraftReviewPage {
   private readonly sheets = inject(MovementSheets);
   private readonly toast = inject(UiToast);
   private readonly router = inject(Router);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+  private readonly reducedMotion = mediaQuerySignal(REDUCED_MOTION_QUERY);
 
   readonly id = input.required<string>();
 
-  protected readonly typeOptions = TYPE_OPTIONS;
+  private readonly roomySegments = mediaQuerySignal(ROOMY_SEGMENTS_QUERY);
+  protected readonly typeOptions = computed(() =>
+    this.roomySegments() ? TYPE_OPTIONS : COMPACT_TYPE_OPTIONS,
+  );
   protected readonly descriptionMax = DESCRIPTION_MAX;
   protected readonly merchantMax = MERCHANT_MAX;
   protected readonly failedMessage = REVIEW_MESSAGES.failed;
   protected readonly notPendingMessage = REVIEW_MESSAGES.notPending;
 
+  protected readonly skeletonFields = [1, 2, 3, 4];
+
   protected readonly draft = signal<Draft | null>(null);
   protected readonly loadFailure = signal<string | null>(null);
+  protected readonly loading = signal(false);
+  protected readonly sourceOpen = signal(false);
   protected readonly type = signal<DraftType>('expense');
   protected readonly amount = signal<number | null>(null);
   protected readonly categoryId = signal<string | null>(null);
@@ -378,6 +504,7 @@ export class DraftReviewPage {
   protected readonly saving = signal(false);
   protected readonly discarding = signal(false);
   protected readonly failure = signal<string | null>(null);
+  protected readonly captureAnnouncement = signal('');
   private readonly initial = signal<Prefill | null>(null);
   private readonly serverErrors = signal<EntryErrors>({});
   private readonly attempted = signal(false);
@@ -406,6 +533,14 @@ export class DraftReviewPage {
   );
 
   private readonly flagged = computed(() => new Set(this.draft()?.low_confidence_fields ?? []));
+  protected readonly flaggedCount = computed(
+    () =>
+      [...this.flagged()].filter((field) => this.isShown(field) && this.isFlagged(field)).length,
+  );
+  protected readonly sourceIcon = computed(() => {
+    const draft = this.draft();
+    return draft === null ? 'lucideMic' : DRAFT_ORIGIN_ICON[draft.origin];
+  });
 
   private readonly currentValues = computed<Prefill>(() => ({
     type: this.type(),
@@ -454,6 +589,10 @@ export class DraftReviewPage {
     });
   }
 
+  protected reload(): void {
+    void this.load(Number(this.id()));
+  }
+
   protected sourceOf(field: DraftField): FieldSource | null {
     return this.draft()?.field_sources[field] ?? null;
   }
@@ -464,6 +603,14 @@ export class DraftReviewPage {
     }
     const initial = this.initial();
     return initial === null || this.unchanged(field, initial);
+  }
+
+  private isShown(field: DraftField): boolean {
+    const transfer = this.type() === 'transfer';
+    if (field === 'to_account_id') {
+      return transfer;
+    }
+    return !(transfer && (field === 'category_id' || field === 'merchant'));
   }
 
   protected stateOf(...fields: string[]): UiState {
@@ -501,6 +648,7 @@ export class DraftReviewPage {
     const date = this.date();
     const accountId = this.accountId();
     if (Object.keys(this.clientErrors()).length > 0 || amount === null || accountId === null) {
+      this.revealFirstProblem();
       return;
     }
     this.saving.set(true);
@@ -512,9 +660,27 @@ export class DraftReviewPage {
       await this.leave();
     } catch (error: unknown) {
       this.handleError(error);
+      this.revealFirstProblem();
     } finally {
       this.saving.set(false);
     }
+  }
+
+  private revealFirstProblem(): void {
+    afterNextRender(
+      () => {
+        const target = this.host.nativeElement.querySelector<HTMLElement>(FIRST_PROBLEM_SELECTOR);
+        if (target === null) {
+          return;
+        }
+        target.scrollIntoView({
+          block: 'center',
+          behavior: this.reducedMotion() ? 'auto' : 'smooth',
+        });
+        target.focus({ preventScroll: true });
+      },
+      { injector: this.injector },
+    );
   }
 
   protected async discard(): Promise<void> {
@@ -636,6 +802,7 @@ export class DraftReviewPage {
 
   private async load(id: number): Promise<void> {
     this.loadFailure.set(null);
+    this.sourceOpen.set(false);
     void this.reference.ensureLoaded().catch(() => undefined);
     const known = this.pending.recall(id);
     if (known !== null) {
@@ -643,10 +810,13 @@ export class DraftReviewPage {
       return;
     }
     this.draft.set(null);
+    this.loading.set(true);
     try {
       this.prepare(await firstValueFrom(this.draftsApi.get(id)));
     } catch (error: unknown) {
       this.loadFailure.set(serverMessage(error) ?? REVIEW_MESSAGES.loadFailed);
+    } finally {
+      this.loading.set(false);
     }
   }
 
@@ -666,5 +836,17 @@ export class DraftReviewPage {
     this.serverErrors.set({});
     this.attempted.set(false);
     this.draft.set(draft);
+    this.announceCaptureFailure(draft);
+  }
+
+  private announceCaptureFailure(draft: Draft): void {
+    this.captureAnnouncement.set('');
+    const failed = draft.status === 'pending' && draft.capture?.status === 'failed';
+    if (!failed) {
+      return;
+    }
+    afterNextRender(() => this.captureAnnouncement.set(REVIEW_MESSAGES.failed), {
+      injector: this.injector,
+    });
   }
 }

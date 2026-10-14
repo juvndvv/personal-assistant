@@ -18,21 +18,35 @@ import { TransfersApi } from '../../core/api/transfers.api';
 import { formatDate, todayInMadrid } from '../../core/date/iso-date';
 import { EurPipe } from '../../core/money/eur.pipe';
 import {
+  UiAlert,
   UiButton,
   UiDateInput,
   UiMoneyInput,
   UiSelect,
   UiSheet,
   UiSheetFooter,
+  UiSkeleton,
   UiToast,
 } from '../../shared/ui';
 import { EntryErrors, entryErrorsFrom } from '../transactions/entry-errors';
 import { MovementSheets } from '../transactions/movement-sheets';
 import { LedgerReferenceData } from '../transactions/reference-data';
+import { ReferenceLoadAlert } from '../transactions/reference-load-alert';
 
 @Component({
   selector: 'app-settle-card-sheet',
-  imports: [EurPipe, UiButton, UiDateInput, UiMoneyInput, UiSelect, UiSheet, UiSheetFooter],
+  imports: [
+    EurPipe,
+    ReferenceLoadAlert,
+    UiAlert,
+    UiButton,
+    UiDateInput,
+    UiMoneyInput,
+    UiSelect,
+    UiSheet,
+    UiSheetFooter,
+    UiSkeleton,
+  ],
   template: `
     <ui-sheet
       [(open)]="open"
@@ -40,14 +54,18 @@ import { LedgerReferenceData } from '../transactions/reference-data';
       description="Registra el pago de la tarjeta como una transferencia. No cuenta como gasto."
     >
       <form class="flex flex-col gap-5 pb-2" novalidate (submit)="submit($event)">
-        @if (failure(); as message) {
-          <p role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {{ message }}
-          </p>
+        @if (suggestionFailure(); as message) {
+          <ui-alert retryable [retrying]="loading()" (retry)="loadSuggestion()">{{
+            message
+          }}</ui-alert>
         }
+        @if (failure(); as message) {
+          <ui-alert>{{ message }}</ui-alert>
+        }
+        <app-reference-load-alert />
         @if (suggestion(); as current) {
           <section
-            class="rounded-xl bg-muted/60 p-4 text-sm"
+            class="glass-fill rounded-card p-4 text-sm"
             aria-label="Extracto"
             data-testid="statement-window"
           >
@@ -58,22 +76,31 @@ import { LedgerReferenceData } from '../transactions/reference-data';
               </p>
               <dl class="mt-2 grid grid-cols-2 gap-2">
                 <dt class="text-muted-foreground">Deuda al cierre</dt>
-                <dd class="text-end tabular-nums">{{ -current.statement_balance_cents | eur }}</dd>
+                <dd class="amount text-end text-foreground">
+                  {{ -current.statement_balance_cents | eur }}
+                </dd>
                 <dt class="text-muted-foreground">Liquidado desde el cierre</dt>
-                <dd class="text-end tabular-nums">{{ current.settled_since_cents | eur }}</dd>
+                <dd class="amount text-end text-foreground">
+                  {{ current.settled_since_cents | eur }}
+                </dd>
               </dl>
             } @else {
               <p class="text-foreground">Sin día de corte: sugerimos la deuda actual.</p>
             }
-            <p class="mt-2 font-medium text-foreground">
-              Importe sugerido:
-              <span class="tabular-nums" data-testid="suggested-amount">{{
+            <div class="mt-3 flex items-baseline justify-between gap-3 border-t border-border pt-3">
+              <p class="font-medium text-foreground">Importe sugerido</p>
+              <span class="amount text-xl text-foreground" data-testid="suggested-amount">{{
                 current.suggested_cents | eur
               }}</span>
-            </p>
+            </div>
           </section>
         } @else if (loading()) {
-          <p class="text-sm text-muted-foreground">Calculando el importe sugerido…</p>
+          <div class="glass-fill rounded-card p-4" role="status" aria-live="polite">
+            <span class="sr-only">Calculando el importe sugerido…</span>
+            <ui-skeleton width="70%" />
+            <ui-skeleton class="mt-3" [lines]="2" />
+            <ui-skeleton shape="amount" class="mt-3 ms-auto" />
+          </div>
         }
         <ui-money-input
           label="Importe"
@@ -130,6 +157,7 @@ export class SettleCardSheet {
   protected readonly loading = signal(false);
   protected readonly saving = signal(false);
   protected readonly failure = signal<string | null>(null);
+  protected readonly suggestionFailure = signal<string | null>(null);
   private readonly serverErrors = signal<EntryErrors>({});
   private readonly attempted = signal(false);
 
@@ -215,31 +243,40 @@ export class SettleCardSheet {
   }
 
   private async prepare(): Promise<void> {
-    const today = todayInMadrid();
     this.suggestion.set(null);
     this.amount.set(null);
     this.fromId.set(
       this.card().settlement_account_id === null ? null : String(this.card().settlement_account_id),
     );
-    this.date.set(today);
+    this.date.set(todayInMadrid());
     this.failure.set(null);
     this.serverErrors.set({});
     this.attempted.set(false);
-    this.loading.set(true);
     void this.reference.ensureLoaded().catch(() => undefined);
+    await this.loadSuggestion();
+  }
+
+  protected async loadSuggestion(): Promise<void> {
+    if (this.loading()) {
+      return;
+    }
+    this.suggestionFailure.set(null);
+    this.loading.set(true);
     try {
       const suggestion = await firstValueFrom(
-        this.accountsApi.settlementSuggestion(this.card().id, today),
+        this.accountsApi.settlementSuggestion(this.card().id, todayInMadrid()),
       );
       this.suggestion.set(suggestion);
-      if (suggestion.suggested_cents > 0) {
+      if (suggestion.suggested_cents > 0 && this.amount() === null) {
         this.amount.set(suggestion.suggested_cents);
       }
       if (suggestion.from_account_id !== null) {
         this.fromId.set(String(suggestion.from_account_id));
       }
     } catch (error: unknown) {
-      this.failure.set(serverMessage(error) ?? 'No se pudo calcular el importe sugerido.');
+      this.suggestionFailure.set(
+        serverMessage(error) ?? 'No se pudo calcular el importe sugerido.',
+      );
     } finally {
       this.loading.set(false);
     }

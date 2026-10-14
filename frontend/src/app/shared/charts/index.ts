@@ -2,7 +2,7 @@ export { BarChart } from './bar-chart';
 export { DonutChart } from './donut-chart';
 export { LineChart } from './line-chart';
 export { ProgressBar, type ProgressTone } from './progress-bar';
-export { StatTile, type StatStatus, type StatTone } from './stat-tile';
+export { StatTile, type StatStatus, type StatTone, type StatVariant } from './stat-tile';
 export {
   formatAxisCents,
   formatBasisPoints,

@@ -1,7 +1,7 @@
 import { provideRouter } from '@angular/router';
 import { render, screen, within } from '@testing-library/angular';
 import userEvent from '@testing-library/user-event';
-import { of } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { RecurringTemplate } from '../../core/api/models';
 import { RecurringApi } from '../../core/api/recurring.api';
 import { UiToast } from '../../shared/ui';
@@ -102,5 +102,39 @@ describe('RecurringPage', () => {
       'href',
       '/mas/fijos/nuevo',
     );
+  });
+
+  it('shows a skeleton while loading and links back to Más', async () => {
+    const pending = new Subject<RecurringTemplate[]>();
+    await render(RecurringPage, {
+      providers: [
+        provideRouter([]),
+        { provide: RecurringApi, useValue: { list: () => pending } },
+        { provide: UiToast, useValue: { success: vi.fn(), error: vi.fn() } },
+      ],
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('Cargando fijos');
+    expect(screen.getByRole('link', { name: 'Más' })).toHaveAttribute('href', '/mas');
+  });
+
+  it('retries after a load error', async () => {
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(throwError(() => new Error('offline')))
+      .mockReturnValue(of([aRecurringTemplate()]));
+    await render(RecurringPage, {
+      providers: [
+        provideRouter([]),
+        { provide: RecurringApi, useValue: { list } },
+        { provide: UiToast, useValue: { success: vi.fn(), error: vi.fn() } },
+      ],
+    });
+    const user = userEvent.setup();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron cargar los fijos.');
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    expect(await screen.findAllByTestId('recurring-row')).toHaveLength(1);
   });
 });

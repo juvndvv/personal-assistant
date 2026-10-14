@@ -2,18 +2,43 @@ import { render, screen } from '@testing-library/angular';
 import { of } from 'rxjs';
 import { AccountsApi } from '../../../core/api/accounts.api';
 import { CategoriesApi } from '../../../core/api/categories.api';
-import { Transaction } from '../../../core/api/models';
-import { aTransaction } from '../testing/transaction-fixtures';
+import { Category, Transaction } from '../../../core/api/models';
+import { LedgerReferenceData } from '../reference-data';
+import { aTransaction, aTransferLeg } from '../testing/transaction-fixtures';
 import { TransactionRow } from './transaction-row';
 
-async function setup(transaction: Transaction) {
-  await render(TransactionRow, {
-    inputs: { transaction },
+const GROCERIES: Category = {
+  id: 11,
+  kind: 'expense',
+  name: 'Supermercado',
+  parent_id: null,
+  icon: 'shopping-cart',
+  color: '#027c6a',
+  sort_order: 0,
+  archived_at: null,
+  children: [],
+};
+
+const FOOD: Category = {
+  ...GROCERIES,
+  id: 10,
+  name: 'Alimentación',
+  icon: 'utensils',
+  color: '#9639ed',
+  children: [{ ...GROCERIES, id: 12, name: 'Cena', parent_id: 10, icon: null, color: null }],
+};
+
+async function setup(transaction: Transaction, accountScoped = false, tree = [GROCERIES]) {
+  const view = await render(TransactionRow, {
+    inputs: { transaction, accountScoped },
     providers: [
       { provide: AccountsApi, useValue: { list: () => of([]) } },
-      { provide: CategoriesApi, useValue: { list: () => of([]) } },
+      { provide: CategoriesApi, useValue: { list: () => of(tree) } },
     ],
   });
+  await view.fixture.debugElement.injector.get(LedgerReferenceData).ensureLoaded();
+  view.fixture.detectChanges();
+  return view.fixture.nativeElement as HTMLElement;
 }
 
 describe('TransactionRow origin', () => {
@@ -27,5 +52,76 @@ describe('TransactionRow origin', () => {
     await setup(aTransaction({ origin: 'manual' }));
 
     expect(screen.queryByTestId('origin-badge')).not.toBeInTheDocument();
+  });
+});
+
+describe('TransactionRow appearance', () => {
+  it('tints the icon with the category palette colour', async () => {
+    const host = await setup(aTransaction());
+
+    const icon = host.querySelector<HTMLElement>('app-category-icon');
+    await vi.waitFor(() =>
+      expect(icon?.style.getPropertyValue('--category-color')).toBe('var(--category-teal)'),
+    );
+    expect(screen.queryByTestId('movement-icon')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the parent colour for a subcategory without its own appearance', async () => {
+    const host = await setup(
+      aTransaction({
+        category: {
+          id: 12,
+          name: 'Cena',
+          kind: 'expense',
+          parent_id: 10,
+          parent_name: 'Alimentación',
+        },
+      }),
+      false,
+      [FOOD],
+    );
+
+    const icon = host.querySelector<HTMLElement>('app-category-icon');
+    await vi.waitFor(() =>
+      expect(icon?.style.getPropertyValue('--category-color')).toBe('var(--category-purple)'),
+    );
+  });
+
+  it('leaves loading the category reference data to its host', async () => {
+    const list = vi.fn(() => of([GROCERIES]));
+    await render(TransactionRow, {
+      inputs: { transaction: aTransaction() },
+      providers: [
+        { provide: AccountsApi, useValue: { list: () => of([]) } },
+        { provide: CategoriesApi, useValue: { list } },
+      ],
+    });
+
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it('shows income with a plus sign and the income colour', async () => {
+    await setup(
+      aTransaction({ type: 'income', amount_cents: 200000, signed_amount_cents: 200000 }),
+    );
+
+    const amount = screen.getByTestId('transaction-amount');
+    expect(amount).toHaveTextContent('+2.000,00 €');
+    expect(amount).toHaveClass('text-income', 'amount');
+  });
+
+  it('keeps expenses neutral and lets the minus sign carry the meaning', async () => {
+    await setup(aTransaction());
+
+    const amount = screen.getByTestId('transaction-amount');
+    expect(amount).toHaveTextContent('-23,50 €');
+    expect(amount).toHaveClass('text-expense');
+  });
+
+  it('marks transfers with the transfer icon and a neutral unsigned amount', async () => {
+    await setup(aTransferLeg());
+
+    expect(screen.getByTestId('movement-icon')).toHaveClass('text-transfer');
+    expect(screen.getByTestId('transaction-amount')).toHaveClass('text-transfer');
   });
 });

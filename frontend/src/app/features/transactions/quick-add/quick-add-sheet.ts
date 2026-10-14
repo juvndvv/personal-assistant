@@ -8,6 +8,7 @@ import {
   model,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideArrowLeftRight, lucideChevronDown, lucideHistory } from '@ng-icons/lucide';
@@ -19,6 +20,7 @@ import { TransactionsApi } from '../../../core/api/transactions.api';
 import { formatDate, todayInMadrid } from '../../../core/date/iso-date';
 import { formatCents } from '../../../core/money/format-cents';
 import {
+  UiAlert,
   UiBadge,
   UiButton,
   UiDateInput,
@@ -28,8 +30,9 @@ import {
   UiSelect,
   UiSheet,
   UiSheetFooter,
+  UiSkeleton,
 } from '../../../shared/ui';
-import { CATEGORY_ICON_SVGS, iconNameFor } from '../../categories/category-appearance';
+import { CategoryIcon } from '../../categories/category-icon';
 import { HISTORY_SUGGESTION_LABEL, injectCategorizationAssist } from '../categorization-assist';
 import { EntryErrors, entryErrorsFrom, optionalText } from '../entry-errors';
 import { CaptureFlow } from '../../drafts/capture-flow';
@@ -37,9 +40,8 @@ import { MovementActions } from '../movement-actions';
 import { MovementSheets } from '../movement-sheets';
 import { CategoryOption, LedgerReferenceData } from '../reference-data';
 import { TagInput } from '../tag-input/tag-input';
-import { CaptureControls, CapturedFile } from './capture-controls';
-
-export const QUICK_ADD_AMOUNT_ID = 'quick-add-amount';
+import { CaptureControls, CapturedFile, OVERLAY_FEEDBACK } from './capture-controls';
+import { keyboardInsetSignal } from './keyboard-inset';
 
 const TYPE_OPTIONS = [
   { value: 'expense', label: 'Gasto' },
@@ -51,6 +53,9 @@ const PROCESSING_LABEL = {
   photo: 'Leyendo el ticket…',
 } as const;
 
+const DEFAULTS_FAILURE_MESSAGE =
+  'No se pudieron cargar los valores por defecto. Revisa los detalles.';
+
 const SAVED_LABEL: Record<EntryType, string> = {
   expense: 'Gasto guardado',
   income: 'Ingreso guardado',
@@ -60,8 +65,10 @@ const SAVED_LABEL: Record<EntryType, string> = {
   selector: 'app-quick-add-sheet',
   imports: [
     CaptureControls,
+    CategoryIcon,
     NgIcon,
     TagInput,
+    UiAlert,
     UiBadge,
     UiButton,
     UiDateInput,
@@ -71,10 +78,10 @@ const SAVED_LABEL: Record<EntryType, string> = {
     UiSelect,
     UiSheet,
     UiSheetFooter,
+    UiSkeleton,
   ],
   providers: [
     provideIcons({
-      ...CATEGORY_ICON_SVGS,
       lucideArrowLeftRight,
       lucideChevronDown,
       lucideHistory,
@@ -82,22 +89,46 @@ const SAVED_LABEL: Record<EntryType, string> = {
   ],
   template: `
     <ui-sheet [(open)]="open" title="Nuevo movimiento">
+      <p role="alert" class="sr-only" data-testid="capture-failure-announcer">
+        {{ captureFailure() }}
+      </p>
       @if (processing(); as kind) {
         <div
-          class="flex flex-col items-center gap-4 py-10 text-center"
+          #processingPanel
+          class="flex flex-col gap-5 pb-2 outline-none"
           role="status"
           aria-live="polite"
+          tabindex="-1"
           data-testid="capture-processing"
         >
-          <span
-            class="size-10 animate-spin rounded-full border-4 border-muted border-t-primary"
-            aria-hidden="true"
-          ></span>
-          <p class="font-medium text-foreground">{{ processingLabel[kind] }}</p>
-          <p class="text-sm text-muted-foreground">
-            Puede tardar unos segundos. Revisarás el borrador antes de guardarlo.
-          </p>
-          <ui-button variant="outline" (clicked)="cancelCapture()">Cancelar</ui-button>
+          <div class="flex items-center gap-3">
+            <span
+              class="size-2.5 shrink-0 rounded-full bg-foreground motion-safe:animate-pulse"
+              aria-hidden="true"
+            ></span>
+            <div class="min-w-0">
+              <p class="font-medium text-foreground">{{ processingLabel[kind] }}</p>
+              <p class="text-sm text-muted-foreground">
+                Puede tardar unos segundos. Revisarás el borrador antes de guardarlo.
+              </p>
+            </div>
+          </div>
+          <div class="flex flex-col gap-4" aria-hidden="true" data-testid="draft-skeleton">
+            <ui-skeleton shape="pill" width="100%" />
+            <div class="flex flex-col gap-2">
+              <ui-skeleton width="4rem" />
+              <ui-skeleton shape="amount" width="10rem" height="2.5rem" />
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <ui-skeleton shape="pill" width="6.5rem" />
+              <ui-skeleton shape="pill" width="5.5rem" />
+              <ui-skeleton shape="pill" width="7rem" />
+            </div>
+            <ui-skeleton [lines]="2" />
+          </div>
+          <ui-button variant="secondary" [fullWidth]="true" (clicked)="cancelCapture()">
+            Cancelar
+          </ui-button>
         </div>
       }
       <form
@@ -108,63 +139,55 @@ const SAVED_LABEL: Record<EntryType, string> = {
         (submit)="submit($event)"
       >
         @if (captureFailure(); as message) {
-          <p
-            role="alert"
-            class="rounded-lg bg-warning/15 px-3 py-2 text-sm text-foreground"
-            data-testid="capture-failure"
-          >
-            {{ message }}
-          </p>
+          <ui-alert tone="warning" data-testid="capture-failure">{{ message }}</ui-alert>
         }
-        <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-2 gap-y-3">
-          <ui-money-input
-            label="Importe"
-            size="lg"
-            name="amount_cents"
-            [inputId]="amountId"
-            [required]="true"
-            [(value)]="amount"
-            [state]="errors().amount_cents ? 'error' : 'default'"
-            [hint]="errors().amount_cents"
-          />
-          <app-capture-controls
-            [disabled]="saving()"
-            [active]="open()"
-            (captured)="capture($event)"
-          />
-        </div>
         <ui-segmented
           ariaLabel="Tipo de movimiento"
+          [onGlass]="true"
           [options]="typeOptions"
           [value]="type()"
           (valueChange)="changeType($event)"
         />
+        <ui-money-input
+          label="Importe"
+          size="lg"
+          name="amount_cents"
+          [required]="true"
+          [(value)]="amount"
+          [state]="errors().amount_cents ? 'error' : 'default'"
+          [hint]="errors().amount_cents"
+        />
 
         <fieldset class="flex flex-col gap-2">
           <legend class="mb-2 text-sm font-medium text-foreground">Categoría</legend>
-          @if (frequent().length === 0 && !defaultsLoaded()) {
-            <p class="text-sm text-muted-foreground">Cargando categorías…</p>
+          @if (frequent().length === 0 && defaultsPending()) {
+            <div role="status" class="flex flex-wrap gap-2">
+              <span class="sr-only">Cargando categorías</span>
+              <ui-skeleton shape="pill" width="6.5rem" />
+              <ui-skeleton shape="pill" width="5.5rem" />
+              <ui-skeleton shape="pill" width="7rem" />
+            </div>
           }
           <div class="flex flex-wrap gap-2" data-testid="quick-add-categories">
             @for (category of frequent(); track category.id) {
               <button
                 type="button"
-                class="inline-flex min-h-11 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-colors"
+                class="inline-flex min-h-11 items-center gap-2 rounded-capsule ps-1.5 pe-4 text-[0.9375rem] font-medium transition-colors duration-150"
                 [class]="
                   category.id === categoryId()
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border bg-background text-foreground hover:bg-muted'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'glass-fill text-foreground ' + overlayFeedback
                 "
                 [attr.aria-pressed]="category.id === categoryId()"
                 (click)="pickCategory(category.id)"
               >
-                <ng-icon [name]="iconFor(category)" size="16" aria-hidden="true" />
+                <app-category-icon [icon]="category.icon" [color]="category.color" size="sm" />
                 {{ category.name }}
               </button>
             }
           </div>
           @if (errors().category_id; as message) {
-            <p role="alert" class="text-xs text-destructive">{{ message }}</p>
+            <p role="alert" class="text-sm text-danger-text">{{ message }}</p>
           }
           @if (assist.active()) {
             <div data-testid="history-suggestion">
@@ -178,16 +201,24 @@ const SAVED_LABEL: Record<EntryType, string> = {
 
         <p class="text-sm text-muted-foreground" data-testid="quick-add-summary">{{ summary() }}</p>
 
+        @if (defaultsFailed()) {
+          <ui-alert
+            retryable
+            [retrying]="defaultsPending()"
+            (retry)="loadDefaults()"
+            data-testid="defaults-failure"
+          >
+            {{ defaultsFailureMessage }}
+          </ui-alert>
+        }
         @if (failure(); as message) {
-          <p role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {{ message }}
-          </p>
+          <ui-alert>{{ message }}</ui-alert>
         }
 
-        <div class="rounded-xl border border-border">
+        <div class="rounded-card glass-fill">
           <button
             type="button"
-            class="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-foreground"
+            class="flex min-h-11 w-full items-center justify-between rounded-card px-4 py-3 text-[0.9375rem] font-medium text-foreground"
             aria-controls="quick-add-details"
             [attr.aria-expanded]="detailsOpen()"
             (click)="detailsOpen.update((value) => !value)"
@@ -196,6 +227,7 @@ const SAVED_LABEL: Record<EntryType, string> = {
             <ng-icon
               name="lucideChevronDown"
               aria-hidden="true"
+              class="transition-transform duration-150"
               [class.rotate-180]="detailsOpen()"
             />
           </button>
@@ -248,7 +280,7 @@ const SAVED_LABEL: Record<EntryType, string> = {
             <ui-input label="Nota" name="note" [maxlength]="1000" [(value)]="note" />
             <app-tag-input [(tags)]="tags" />
             @if (errors().tags; as message) {
-              <p role="alert" class="text-xs text-destructive">{{ message }}</p>
+              <p role="alert" class="text-sm text-danger-text">{{ message }}</p>
             }
           </div>
         </div>
@@ -258,11 +290,28 @@ const SAVED_LABEL: Record<EntryType, string> = {
           Transferencia entre cuentas
         </ui-button>
       </form>
-      <div uiSheetFooter>
+      <div
+        uiSheetFooter
+        class="pb-(--keyboard-inset)"
+        data-testid="quick-add-footer"
+        [style.--keyboard-inset]="keyboardInset() + 'px'"
+      >
         @if (processing() === null) {
-          <ui-button [fullWidth]="true" size="lg" [loading]="saving()" (clicked)="submit($event)">
-            Guardar
-          </ui-button>
+          <app-capture-controls
+            [disabled]="saving()"
+            [active]="open()"
+            (captured)="capture($event)"
+          >
+            <ui-button
+              class="min-w-0 flex-1"
+              [fullWidth]="true"
+              size="lg"
+              [loading]="saving()"
+              (clicked)="submit($event)"
+            >
+              Guardar
+            </ui-button>
+          </app-capture-controls>
         }
       </div>
     </ui-sheet>
@@ -275,16 +324,20 @@ export class QuickAddSheet {
   private readonly reference = inject(LedgerReferenceData);
   private readonly actions = inject(MovementActions);
   private readonly sheets = inject(MovementSheets);
-  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly captureFlow = inject(CaptureFlow);
   protected readonly assist = injectCategorizationAssist();
   protected readonly historyLabel = HISTORY_SUGGESTION_LABEL;
 
   readonly open = model(false);
+  protected readonly keyboardInset = keyboardInsetSignal(this.open);
 
-  protected readonly amountId = QUICK_ADD_AMOUNT_ID;
   protected readonly typeOptions = TYPE_OPTIONS;
   protected readonly processingLabel = PROCESSING_LABEL;
+  protected readonly defaultsFailureMessage = DEFAULTS_FAILURE_MESSAGE;
+  protected readonly overlayFeedback = OVERLAY_FEEDBACK;
+  private readonly processingPanel = viewChild<ElementRef<HTMLElement>>('processingPanel');
+  private readonly captureControls = viewChild(CaptureControls);
+  private returnFocusAfterCapture = false;
   protected readonly processing = this.captureFlow.processing;
   protected readonly captureFailure = this.captureFlow.failure;
   private clientStartedAt = new Date().toISOString();
@@ -301,12 +354,11 @@ export class QuickAddSheet {
   protected readonly saving = signal(false);
   protected readonly failure = signal<string | null>(null);
   private readonly defaults = signal<QuickAddDefaults | null>(null);
-  private readonly defaultsPending = signal(false);
+  protected readonly defaultsPending = signal(false);
+  protected readonly defaultsFailed = signal(false);
   private openedOn = todayInMadrid();
   private readonly serverErrors = signal<EntryErrors>({});
   private readonly attempted = signal(false);
-
-  protected readonly defaultsLoaded = computed(() => this.defaults() !== null);
 
   protected readonly frequent = computed<CategoryOption[]>(() => {
     const byId = this.reference.categoryById();
@@ -376,7 +428,6 @@ export class QuickAddSheet {
         untracked(() => {
           this.reset();
           void this.loadDefaults();
-          this.focusAmount();
         });
       } else {
         untracked(() => {
@@ -384,6 +435,23 @@ export class QuickAddSheet {
             this.captureFlow.cancel();
           }
         });
+      }
+    });
+    effect(() => this.processingPanel()?.nativeElement.focus());
+    effect(() => {
+      const processing = this.processing();
+      const controls = this.captureControls();
+      if (processing !== null) {
+        this.returnFocusAfterCapture = true;
+        return;
+      }
+      if (!this.open()) {
+        this.returnFocusAfterCapture = false;
+        return;
+      }
+      if (this.returnFocusAfterCapture && controls !== undefined) {
+        this.returnFocusAfterCapture = false;
+        controls.focusVoice();
       }
     });
   }
@@ -402,11 +470,6 @@ export class QuickAddSheet {
 
   protected cancelCapture(): void {
     this.captureFlow.cancel();
-    this.focusAmount();
-  }
-
-  protected iconFor(category: CategoryOption): string {
-    return iconNameFor(category.icon);
   }
 
   protected changeType(value: string): void {
@@ -536,8 +599,9 @@ export class QuickAddSheet {
     this.attempted.set(false);
   }
 
-  private async loadDefaults(): Promise<void> {
+  protected async loadDefaults(): Promise<void> {
     this.defaults.set(null);
+    this.defaultsFailed.set(false);
     this.defaultsPending.set(true);
     try {
       const [defaults] = await Promise.all([
@@ -556,21 +620,10 @@ export class QuickAddSheet {
         this.accountId.set(String(defaults.account_id));
       }
     } catch {
-      this.failure.set('No se pudieron cargar los valores por defecto. Revisa los detalles.');
+      this.defaultsFailed.set(true);
       this.detailsOpen.set(true);
     } finally {
       this.defaultsPending.set(false);
-    }
-  }
-
-  private focusAmount(attempt = 0): void {
-    const element = this.host.nativeElement.ownerDocument.getElementById(QUICK_ADD_AMOUNT_ID);
-    if (element !== null) {
-      element.focus();
-      return;
-    }
-    if (attempt < 20) {
-      setTimeout(() => this.focusAmount(attempt + 1), 16);
     }
   }
 }

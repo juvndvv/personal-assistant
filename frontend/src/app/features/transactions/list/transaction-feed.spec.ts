@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { render, screen } from '@testing-library/angular';
 import userEvent from '@testing-library/user-event';
-import { Observable, Subject, of } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 import { AccountsApi } from '../../../core/api/accounts.api';
 import { CategoriesApi } from '../../../core/api/categories.api';
 import {
@@ -15,7 +15,12 @@ import { UiToast } from '../../../shared/ui';
 import { MovementSheets } from '../movement-sheets';
 import { aPage } from '../testing/feed-fakes';
 import { aTransaction } from '../testing/transaction-fixtures';
-import { TransactionFeed } from './transaction-feed';
+import {
+  FEED_HEADER_HEIGHT,
+  FEED_ITEM_HEIGHT,
+  LOAD_MORE_FAILED_MESSAGE,
+  TransactionFeed,
+} from './transaction-feed';
 
 const FIRST_QUERY: TransactionListQuery = { q: 'cafe' };
 const SECOND_QUERY: TransactionListQuery = { q: 'nomina' };
@@ -94,5 +99,69 @@ describe('TransactionFeed', () => {
     expect(screen.queryByText('Croissant')).not.toBeInTheDocument();
     expect(metas.at(-1)).toEqual(expect.objectContaining({ current_page: 1, last_page: 2 }));
     expect(screen.getByRole('button', { name: 'Cargar más' })).toBeEnabled();
+  });
+
+  it('gives date headers a compact height and keeps rows within the card width', async () => {
+    await setup();
+    await screen.findByText('Café');
+
+    const header = screen.getByTestId('date-header').parentElement as HTMLElement;
+    const row = screen.getByTestId('transaction-row').closest('[role="listitem"]') as HTMLElement;
+    expect(header.style.height).toBe(`${FEED_HEADER_HEIGHT}px`);
+    expect(row.style.height).toBe(`${FEED_ITEM_HEIGHT}px`);
+    expect(screen.getByRole('list', { name: 'Movimientos' })).toHaveClass(
+      '[&_.cdk-virtual-scroll-content-wrapper]:w-full',
+    );
+  });
+
+  it('shows a skeleton list while the first page loads', async () => {
+    await render(TransactionFeed, {
+      providers: [
+        { provide: TransactionsApi, useValue: { list: () => new Subject<TransactionPage>() } },
+        { provide: TransfersApi, useValue: {} },
+        { provide: AccountsApi, useValue: { list: () => of([]) } },
+        { provide: CategoriesApi, useValue: { list: () => of([]) } },
+        { provide: UiToast, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn() } },
+      ],
+      inputs: { query: FIRST_QUERY },
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('Cargando movimientos');
+    expect(screen.queryByRole('list', { name: 'Movimientos' })).not.toBeInTheDocument();
+  });
+
+  it('offers a retry when the movements fail to load', async () => {
+    const { view, list, user } = await setup();
+    await screen.findByText('Café');
+    list.mockReturnValueOnce(throwError(() => new Error('offline')));
+    TestBed.inject(MovementSheets).notifyChanged();
+    await view.fixture.whenStable();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('No se pudieron cargar los movimientos.');
+
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    expect(await screen.findByText('Café')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('reports a failed load-more page and retries it', async () => {
+    const { list, user } = await setup();
+    await screen.findByText('Café');
+    list.mockReturnValueOnce(throwError(() => new Error('offline')));
+
+    await user.click(screen.getByRole('button', { name: 'Cargar más' }));
+
+    expect(await screen.findByTestId('load-more-failed')).toHaveTextContent(
+      LOAD_MORE_FAILED_MESSAGE,
+    );
+    expect(screen.queryByRole('button', { name: 'Cargar más' })).not.toBeInTheDocument();
+
+    list.mockReturnValueOnce(of(staleSecondPage()));
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    expect(await screen.findByText('Croissant')).toBeInTheDocument();
+    expect(screen.queryByTestId('load-more-failed')).not.toBeInTheDocument();
   });
 });

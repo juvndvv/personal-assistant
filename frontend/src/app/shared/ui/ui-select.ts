@@ -10,7 +10,7 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideChevronDown } from '@ng-icons/lucide';
 import { hintIdFor } from './field-accessibility';
 import { UiField } from './ui-field';
-import { UiSize, UiState, nextUiId } from './ui-types';
+import { FIELD_STATE_CLASS, UiSize, UiState, nextUiId } from './ui-types';
 
 export interface UiSelectOption {
   value: string;
@@ -22,12 +22,6 @@ const SIZE_CLASS: Record<UiSize, string> = {
   sm: 'h-8 text-sm',
   md: 'h-10 text-base md:text-sm',
   lg: 'h-12 text-base',
-};
-
-const STATE_CLASS: Record<UiState, string> = {
-  default: 'border-input focus-visible:border-ring focus-visible:ring-ring/50',
-  warning: 'border-warning focus-visible:ring-warning/30',
-  error: 'border-destructive focus-visible:ring-destructive/20',
 };
 
 @Component({
@@ -94,7 +88,7 @@ export class UiSelect {
   protected readonly hintId = computed(() => hintIdFor(this.selectId()));
   protected readonly selectClass = computed(
     () =>
-      `w-full min-w-0 appearance-none rounded-lg border bg-transparent ps-3 pe-9 text-foreground outline-none transition-colors duration-150 focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 ${SIZE_CLASS[this.size()]} ${STATE_CLASS[this.state()]}`,
+      `w-full min-w-0 appearance-none rounded-lg border bg-transparent ps-3 pe-9 text-foreground outline-none transition-colors duration-150 focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 ${SIZE_CLASS[this.size()]} ${FIELD_STATE_CLASS[this.state()]}`,
   );
 
   protected onChange(event: Event): void {

@@ -17,6 +17,7 @@ import { compareIsoDates, formatDate, todayInMadrid } from '../../core/date/iso-
 import { EurPipe } from '../../core/money/eur.pipe';
 import { formatCents } from '../../core/money/format-cents';
 import {
+  UiAlert,
   UiButton,
   UiDateInput,
   UiInput,
@@ -35,7 +36,7 @@ interface AdjustmentErrors {
 
 @Component({
   selector: 'app-adjust-balance-sheet',
-  imports: [EurPipe, UiButton, UiDateInput, UiInput, UiMoneyInput, UiSheet, UiSheetFooter],
+  imports: [EurPipe, UiAlert, UiButton, UiDateInput, UiInput, UiMoneyInput, UiSheet, UiSheetFooter],
   template: `
     <ui-sheet
       [(open)]="open"
@@ -46,15 +47,15 @@ interface AdjustmentErrors {
         <div class="flex flex-col gap-2 px-1 py-2" role="status">
           <p class="text-sm text-muted-foreground">Ajuste registrado</p>
           <p
-            class="text-2xl font-semibold tabular-nums"
-            [class]="adjustment.signed_amount_cents < 0 ? 'text-destructive' : 'text-success-text'"
+            class="amount text-3xl"
+            [class]="adjustment.signed_amount_cents > 0 ? 'text-income' : 'text-expense'"
             data-testid="adjustment-delta"
           >
             {{ adjustment.signed_amount_cents | eur: { signed: true } }}
           </p>
           <p class="text-sm text-foreground">
             Saldo a {{ formatDate(adjustment.date) }}:
-            <strong class="tabular-nums">{{ adjustment.adjustment_target_cents | eur }}</strong>
+            <strong class="amount">{{ adjustment.adjustment_target_cents | eur }}</strong>
           </p>
         </div>
       } @else {
@@ -65,9 +66,7 @@ interface AdjustmentErrors {
           (submit)="submit($event)"
         >
           @if (failure(); as message) {
-            <p role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {{ message }}
-            </p>
+            <ui-alert>{{ message }}</ui-alert>
           }
           <ui-money-input
             label="Saldo real"

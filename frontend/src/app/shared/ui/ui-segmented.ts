@@ -29,8 +29,8 @@ export interface UiSegmentOption {
         <span
           aria-hidden="true"
           data-testid="segmented-indicator"
-          class="segment-indicator pointer-events-none absolute inset-y-1 start-1 rounded-capsule transition-transform duration-[350ms] ease-spring"
-          [class]="onGlass() ? 'bg-glass-fill' : 'bg-card shadow-sm dark:bg-fill-strong'"
+          class="segment-indicator pointer-events-none absolute inset-y-1 start-1 rounded-capsule shadow-sm ring-1 ring-segment-indicator-edge ring-inset transition-transform duration-[350ms] ease-spring"
+          [class]="onGlass() ? 'bg-segment-indicator-on-glass' : 'bg-segment-indicator'"
         ></span>
       }
       @for (option of options(); track option.value) {
@@ -39,7 +39,7 @@ export interface UiSegmentOption {
           role="radio"
           [attr.aria-checked]="option.value === value()"
           [tabIndex]="option.value === value() ? 0 : -1"
-          class="relative min-h-10 rounded-capsule px-3 text-sm transition-colors duration-150"
+          class="relative min-h-11 min-w-0 truncate rounded-capsule px-3 text-sm transition-colors duration-150"
           [class]="
             option.value === value()
               ? 'font-semibold text-foreground'

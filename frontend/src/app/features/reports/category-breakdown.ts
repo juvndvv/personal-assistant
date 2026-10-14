@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CategoryKind, PeriodSummary } from '../../core/api/models';
 import { EurPipe } from '../../core/money/eur.pipe';
@@ -9,17 +9,21 @@ import {
   formatBasisPoints,
   seriesColor,
 } from '../../shared/charts';
-import { UiSegmentOption, UiSegmented } from '../../shared/ui';
+import { UiCard, UiSegmentOption, UiSegmented } from '../../shared/ui';
+import { CategoryIcon } from '../categories/category-icon';
+import { categoryColorVar } from '../categories/category-appearance';
+import { CategoryVisual, LedgerReferenceData } from '../transactions/reference-data';
 import { KIND_LABELS, movementsQueryParams } from './reports-display';
 
 const MAX_DONUT_SEGMENTS = 6;
 
 @Component({
   selector: 'app-category-breakdown',
-  imports: [DonutChart, EurPipe, ProgressBar, RouterLink, UiSegmented],
+  imports: [CategoryIcon, DonutChart, EurPipe, ProgressBar, RouterLink, UiCard, UiSegmented],
   template: `
     <section
-      class="rounded-2xl border border-border bg-background p-5"
+      uiCard
+      padding="lg"
       aria-labelledby="breakdown-heading"
       data-testid="category-breakdown"
     >
@@ -41,7 +45,7 @@ const MAX_DONUT_SEGMENTS = 6;
             [routerLink]="[]"
             [queryParams]="{ category: null }"
             queryParamsHandling="merge"
-            class="text-primary-text hover:underline"
+            class="text-link hover:underline"
             >Todas las categorías</a
           >
           <span class="text-muted-foreground" aria-hidden="true"> / </span>
@@ -51,9 +55,7 @@ const MAX_DONUT_SEGMENTS = 6;
           <h3 class="text-base font-semibold text-foreground" data-testid="drill-heading">
             {{ current.name }}
           </h3>
-          <span class="font-semibold tabular-nums text-foreground">{{
-            current.amount_cents | eur
-          }}</span>
+          <span class="amount text-lg text-foreground">{{ current.amount_cents | eur }}</span>
         </div>
         <ul class="divide-y divide-border" [attr.aria-label]="'Subcategorías de ' + current.name">
           @for (child of current.children; track child.category_id) {
@@ -61,30 +63,39 @@ const MAX_DONUT_SEGMENTS = 6;
               <a
                 [routerLink]="['/movimientos']"
                 [queryParams]="movementsParams(child.category_id)"
-                class="flex flex-col gap-1.5 py-2.5 hover:text-primary-text"
+                class="-mx-2 flex items-center gap-3 rounded-menu-item px-2 py-3 transition-colors duration-150 hover:bg-hover active:bg-pressed"
                 data-testid="breakdown-row"
               >
-                <span class="flex items-baseline justify-between gap-3 text-sm">
-                  <span class="truncate text-foreground">{{ child.name }}</span>
-                  <span class="tabular-nums text-foreground">{{ child.amount_cents | eur }}</span>
-                </span>
-                <app-progress-bar
-                  [value]="child.amount_cents"
-                  [max]="current.amount_cents"
-                  [label]="'Peso de ' + child.name + ' en ' + current.name"
+                <app-category-icon
+                  size="sm"
+                  [icon]="visualOf(child.category_id).icon"
+                  [color]="visualOf(child.category_id).color"
                 />
+                <span class="flex min-w-0 flex-1 flex-col gap-2">
+                  <span class="flex items-baseline justify-between gap-3 text-sm">
+                    <span class="truncate text-foreground">{{ child.name }}</span>
+                    <span class="amount text-foreground">{{ child.amount_cents | eur }}</span>
+                  </span>
+                  <app-progress-bar
+                    [value]="child.amount_cents"
+                    [max]="current.amount_cents"
+                    [color]="paletteColorOf(child.category_id)"
+                    [label]="'Peso de ' + child.name + ' en ' + current.name"
+                  />
+                </span>
               </a>
             </li>
           }
           @if (current.own_cents > 0) {
-            <li class="flex flex-col gap-1.5 py-2.5" data-testid="breakdown-own-row">
+            <li class="flex flex-col gap-2 py-3" data-testid="breakdown-own-row">
               <span class="flex items-baseline justify-between gap-3 text-sm">
                 <span class="truncate text-muted-foreground">Sin subcategoría</span>
-                <span class="tabular-nums text-foreground">{{ current.own_cents | eur }}</span>
+                <span class="amount text-foreground">{{ current.own_cents | eur }}</span>
               </span>
               <app-progress-bar
                 [value]="current.own_cents"
                 [max]="current.amount_cents"
+                [color]="paletteColorOf(current.category_id)"
                 [label]="'Peso sin subcategoría en ' + current.name"
               />
             </li>
@@ -93,7 +104,7 @@ const MAX_DONUT_SEGMENTS = 6;
         <a
           [routerLink]="['/movimientos']"
           [queryParams]="movementsParams(current.category_id)"
-          class="mt-3 inline-block text-sm text-primary-text hover:underline"
+          class="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-link hover:underline"
         >
           Ver los movimientos de {{ current.name }}
         </a>
@@ -119,32 +130,39 @@ const MAX_DONUT_SEGMENTS = 6;
                     : movementsParams(node.category_id)
                 "
                 [queryParamsHandling]="node.children.length > 0 ? 'merge' : ''"
-                class="flex flex-col gap-1.5 py-2.5 hover:text-primary-text"
+                class="-mx-2 flex items-center gap-3 rounded-menu-item px-2 py-3 transition-colors duration-150 hover:bg-hover active:bg-pressed"
                 data-testid="breakdown-row"
               >
-                <span class="flex items-baseline justify-between gap-3 text-sm">
-                  <span class="min-w-0 truncate text-foreground">
-                    {{ node.name }}
-                    @if (node.children.length > 0) {
-                      <span class="text-xs text-muted-foreground">
-                        · {{ node.children.length }}
-                        {{ node.children.length === 1 ? 'subcategoría' : 'subcategorías' }}
-                      </span>
-                    }
-                  </span>
-                  <span class="shrink-0 tabular-nums text-foreground">
-                    {{ node.amount_cents | eur }}
-                    <span class="ms-1 text-xs text-muted-foreground">{{
-                      share(node.share_bp)
-                    }}</span>
-                  </span>
-                </span>
-                <app-progress-bar
-                  [value]="node.share_bp"
-                  [color]="colorOf(node.category_id)"
-                  [label]="'Peso de ' + node.name"
-                  [valueText]="share(node.share_bp)"
+                <app-category-icon
+                  size="sm"
+                  [icon]="visualOf(node.category_id).icon"
+                  [color]="visualOf(node.category_id).color"
                 />
+                <span class="flex min-w-0 flex-1 flex-col gap-2">
+                  <span class="flex items-baseline justify-between gap-3 text-sm">
+                    <span class="min-w-0 truncate text-foreground">
+                      {{ node.name }}
+                      @if (node.children.length > 0) {
+                        <span class="text-xs text-muted-foreground">
+                          · {{ node.children.length }}
+                          {{ node.children.length === 1 ? 'subcategoría' : 'subcategorías' }}
+                        </span>
+                      }
+                    </span>
+                    <span class="amount shrink-0 text-foreground">
+                      {{ node.amount_cents | eur }}
+                      <span class="ms-1 text-xs font-normal text-muted-foreground">{{
+                        share(node.share_bp)
+                      }}</span>
+                    </span>
+                  </span>
+                  <app-progress-bar
+                    [value]="node.share_bp"
+                    [color]="colorOf(node.category_id)"
+                    [label]="'Peso de ' + node.name"
+                    [valueText]="share(node.share_bp)"
+                  />
+                </span>
               </a>
             </li>
           }
@@ -155,6 +173,8 @@ const MAX_DONUT_SEGMENTS = 6;
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CategoryBreakdown {
+  private readonly reference = inject(LedgerReferenceData);
+
   readonly summary = input.required<PeriodSummary>();
   readonly kind = input<CategoryKind>('expense');
   readonly parentId = input<number | null>(null);
@@ -180,19 +200,30 @@ export class CategoryBreakdown {
       })),
       MAX_DONUT_SEGMENTS,
       'Otras',
-    ),
+    ).map((segment) => {
+      const color = segment.slot === null ? null : this.paletteColorOf(Number(segment.key));
+      return color === null ? segment : { ...segment, color };
+    }),
   );
 
-  private readonly colors = computed(() => {
-    const byKey = new Map(
-      this.segments().map((segment) => [segment.key, seriesColor(segment.slot)]),
-    );
-    const other = seriesColor(null);
-    return (categoryId: number) => byKey.get(String(categoryId)) ?? other;
-  });
+  private readonly slotColors = computed(
+    () => new Map(this.segments().map((segment) => [segment.key, seriesColor(segment.slot)])),
+  );
 
   protected colorOf(categoryId: number): string {
-    return this.colors()(categoryId);
+    return (
+      this.paletteColorOf(categoryId) ??
+      this.slotColors().get(String(categoryId)) ??
+      seriesColor(null)
+    );
+  }
+
+  protected visualOf(categoryId: number): CategoryVisual {
+    return this.reference.visualOf(categoryId);
+  }
+
+  protected paletteColorOf(categoryId: number): string | null {
+    return categoryColorVar(this.reference.visualOf(categoryId).color);
   }
 
   protected share(shareBp: number): string {

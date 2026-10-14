@@ -34,11 +34,6 @@ export const routes: Routes = [
           import('./features/transactions/list/transactions.page').then((m) => m.TransactionsPage),
       },
       {
-        path: 'capturar',
-        title: 'Capturar · Finanzas',
-        loadComponent: () => import('./features/capture/capture.page').then((m) => m.CapturePage),
-      },
-      {
         path: 'pendientes',
         title: 'Pendientes · Finanzas',
         loadComponent: () =>

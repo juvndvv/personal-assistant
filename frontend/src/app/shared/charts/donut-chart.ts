@@ -52,7 +52,7 @@ interface LegendRow {
           class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center"
         >
           <span class="text-xs text-muted-foreground">{{ activeLabel() }}</span>
-          <span class="text-sm font-semibold text-foreground">{{ activeValue() }}</span>
+          <span class="amount text-base text-foreground">{{ activeValue() }}</span>
         </div>
       </div>
       <ul class="flex min-w-40 flex-1 flex-col gap-1.5 text-sm" [attr.aria-label]="ariaLabel()">
@@ -65,7 +65,7 @@ interface LegendRow {
           >
             <span class="size-2.5 shrink-0 rounded-xs" [style.background]="row.color"></span>
             <span class="min-w-0 flex-1 truncate text-foreground">{{ row.label }}</span>
-            <span class="tabular-nums text-foreground">{{ row.value }}</span>
+            <span class="amount text-foreground">{{ row.value }}</span>
             <span class="w-14 text-end tabular-nums text-muted-foreground">{{ row.share }}</span>
           </li>
         }
@@ -103,7 +103,7 @@ export class DonutChart {
         const sweep = Math.min(ALMOST_FULL_TURN, (segment.value / total) * FULL_TURN);
         const path = arcPath(center, center, outer, inner, angle, angle + sweep);
         angle += sweep;
-        return { key: segment.key, label: segment.label, path, color: seriesColor(segment.slot) };
+        return { key: segment.key, label: segment.label, path, color: segmentColor(segment) };
       });
   });
 
@@ -112,7 +112,7 @@ export class DonutChart {
     return this.segments().map((segment) => ({
       key: segment.key,
       label: segment.label,
-      color: seriesColor(segment.slot),
+      color: segmentColor(segment),
       value: this.valueFormatter()(segment.value),
       share: formatBasisPoints(total === 0 ? 0 : Math.round((segment.value * 10_000) / total)),
     }));
@@ -125,4 +125,8 @@ export class DonutChart {
   protected readonly activeValue = computed(() =>
     this.valueFormatter()(this.activeSegment()?.value ?? this.total()),
   );
+}
+
+function segmentColor(segment: DonutSegment): string {
+  return segment.color ?? seriesColor(segment.slot);
 }

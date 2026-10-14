@@ -20,13 +20,13 @@ import {
   host: { class: 'contents' },
   template: `
     <span
-      class="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
+      class="flex size-10 shrink-0 items-center justify-center rounded-full bg-fill-on-card text-muted-foreground"
     >
       <ng-icon [name]="originIcon()" size="18" [attr.aria-label]="originLabel()" />
     </span>
     <span class="min-w-0 flex-1">
       <span class="block truncate font-medium text-foreground">{{ title() }}</span>
-      <span class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <span class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
         {{ dateLabel() }}
         @if (recurring()) {
           <ui-badge tone="warning">{{ recurringPrompt }}</ui-badge>
@@ -37,7 +37,7 @@ import {
         }
       </span>
     </span>
-    <span class="shrink-0 text-end font-medium tabular-nums text-foreground">
+    <span class="amount shrink-0 text-end text-base text-foreground">
       @if (draft().proposal.amount_cents; as amount) {
         @if (recurring()) {
           <span class="block text-xs font-normal text-muted-foreground">Estimado</span>
@@ -47,7 +47,7 @@ import {
         —
       }
     </span>
-    <ng-icon name="lucideChevronRight" class="text-muted-foreground" aria-hidden="true" />
+    <ng-icon name="lucideChevronRight" class="shrink-0 text-subtle-foreground" aria-hidden="true" />
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

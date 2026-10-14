@@ -1,7 +1,7 @@
 import { provideRouter } from '@angular/router';
 import { render, screen } from '@testing-library/angular';
 import userEvent from '@testing-library/user-event';
-import { of } from 'rxjs';
+import { NEVER, Observable, of, throwError } from 'rxjs';
 import { AccountsApi } from '../../core/api/accounts.api';
 import { Period, Settings } from '../../core/api/models';
 import { PeriodsApi } from '../../core/api/periods.api';
@@ -30,9 +30,9 @@ const settings: Settings = {
   current_period: calendarOctober,
 };
 
-async function setup() {
+async function setup(get: () => Observable<Settings> = () => of(settings)) {
   const settingsApi = {
-    get: vi.fn(() => of(settings)),
+    get: vi.fn(get),
     update: vi.fn((patch: Partial<Settings>) =>
       of({ ...settings, ...patch, current_period: paydayOctober }),
     ),
@@ -52,13 +52,18 @@ async function setup() {
       { provide: UiToast, useValue: { success: vi.fn(), error: vi.fn() } },
     ],
   });
-  await screen.findByLabelText(/día de inicio del mes/i);
   return { settingsApi, periodsApi, user: userEvent.setup() };
+}
+
+async function setupLoaded() {
+  const context = await setup();
+  await screen.findByLabelText(/día de inicio del mes/i);
+  return context;
 }
 
 describe('SettingsPage', () => {
   it('shows the current period from the settings', async () => {
-    await setup();
+    await setupLoaded();
 
     const preview = screen.getByTestId('period-preview');
     expect(preview).toHaveTextContent('Periodo actual: octubre de 2026');
@@ -66,7 +71,7 @@ describe('SettingsPage', () => {
   });
 
   it('previews the period for another start day without saving', async () => {
-    const { settingsApi, periodsApi, user } = await setup();
+    const { settingsApi, periodsApi, user } = await setupLoaded();
 
     await user.selectOptions(screen.getByLabelText(/día de inicio del mes/i), '25');
 
@@ -75,8 +80,22 @@ describe('SettingsPage', () => {
     expect(settingsApi.update).not.toHaveBeenCalled();
   });
 
+  it('retries the period preview after it fails', async () => {
+    const { periodsApi, user } = await setupLoaded();
+    periodsApi.current.mockReturnValueOnce(throwError(() => new Error('offline')));
+
+    await user.selectOptions(screen.getByLabelText(/día de inicio del mes/i), '25');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo calcular el periodo.');
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    expect(periodsApi.current).toHaveBeenLastCalledWith(25);
+    expect(await screen.findByText('Del 25 sept 2026 al 24 oct 2026')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('offers start days 1 to 28 only', async () => {
-    await setup();
+    await setupLoaded();
 
     const options = Array.from(
       (screen.getByLabelText(/día de inicio del mes/i) as HTMLSelectElement).options,
@@ -86,7 +105,7 @@ describe('SettingsPage', () => {
   });
 
   it('saves start day, default account and draft TTL', async () => {
-    const { settingsApi, user } = await setup();
+    const { settingsApi, user } = await setupLoaded();
 
     await user.selectOptions(screen.getByLabelText(/día de inicio del mes/i), '25');
     await user.selectOptions(screen.getByLabelText(/cuenta por defecto/i), '3');
@@ -103,7 +122,7 @@ describe('SettingsPage', () => {
   });
 
   it('rejects a TTL outside 1..90', async () => {
-    const { settingsApi, user } = await setup();
+    const { settingsApi, user } = await setupLoaded();
 
     const ttl = screen.getByLabelText(/borradores/i);
     await user.clear(ttl);
@@ -115,6 +134,31 @@ describe('SettingsPage', () => {
   });
 });
 
+describe('SettingsPage loading', () => {
+  it('shows a skeleton while the settings load', async () => {
+    await setup(() => NEVER);
+
+    expect(screen.getByTestId('settings-loading')).toHaveTextContent('Cargando ajustes');
+    expect(screen.queryByRole('button', { name: 'Guardar ajustes' })).not.toBeInTheDocument();
+  });
+
+  it('retries after the settings fail to load', async () => {
+    const get = vi
+      .fn<() => Observable<Settings>>()
+      .mockReturnValueOnce(throwError(() => new Error('offline')))
+      .mockReturnValue(of(settings));
+    const { user } = await setup(get);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No se pudieron cargar los ajustes.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    expect(await screen.findByLabelText(/día de inicio del mes/i)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
 describe('SettingsPage appearance', () => {
   afterEach(() => {
     localStorage.clear();
@@ -123,7 +167,7 @@ describe('SettingsPage appearance', () => {
   });
 
   it('switches the theme and reduced transparency', async () => {
-    const { user } = await setup();
+    const { user } = await setupLoaded();
 
     await user.click(screen.getByRole('radio', { name: 'Oscuro' }));
     expect(document.documentElement.classList.contains('dark')).toBe(true);

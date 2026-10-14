@@ -16,6 +16,7 @@ import { serverMessage } from '../../../core/api/api-error';
 import { EntryType, Transaction, TransactionPatch } from '../../../core/api/models';
 import { TransactionsApi } from '../../../core/api/transactions.api';
 import {
+  UiAlert,
   UiBadge,
   UiButton,
   UiDateInput,
@@ -33,6 +34,7 @@ import { MovementActions } from '../movement-actions';
 import { MovementSheets } from '../movement-sheets';
 import { ReceiptsGallery } from '../receipts/receipts-gallery';
 import { LedgerReferenceData } from '../reference-data';
+import { ReferenceLoadAlert } from '../reference-load-alert';
 import { TagInput } from '../tag-input/tag-input';
 
 function idOrNull(value: string | null): number | null {
@@ -49,7 +51,9 @@ const TYPE_OPTIONS = [
   imports: [
     NgIcon,
     ReceiptsGallery,
+    ReferenceLoadAlert,
     TagInput,
+    UiAlert,
     UiBadge,
     UiButton,
     UiDateInput,
@@ -74,9 +78,10 @@ const TYPE_OPTIONS = [
     >
       <form class="flex flex-col gap-5 pb-2" novalidate (submit)="submit($event)">
         @if (failure(); as message) {
-          <p role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {{ message }}
-          </p>
+          <ui-alert>{{ message }}</ui-alert>
+        }
+        @if (!isAdjustment()) {
+          <app-reference-load-alert />
         }
         @if (isAdjustment()) {
           <ui-money-input
@@ -91,6 +96,7 @@ const TYPE_OPTIONS = [
         } @else {
           <ui-segmented
             ariaLabel="Tipo de movimiento"
+            onGlass
             [options]="typeOptions"
             [value]="type()"
             (valueChange)="changeType($event)"
@@ -162,12 +168,12 @@ const TYPE_OPTIONS = [
         @if (!isAdjustment()) {
           <app-tag-input [(tags)]="tags" />
           @if (errors().tags; as message) {
-            <p role="alert" class="text-xs text-destructive">{{ message }}</p>
+            <p role="alert" class="text-sm text-danger-text">{{ message }}</p>
           }
         }
       </form>
       @if (!isAdjustment()) {
-        <div class="border-t border-border pt-4 pb-2">
+        <div class="mt-2 border-t border-border pt-4 pb-2">
           <app-receipts-gallery [transactionId]="transaction()?.id ?? null" />
         </div>
       }

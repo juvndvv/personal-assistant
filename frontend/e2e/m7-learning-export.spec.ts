@@ -217,7 +217,8 @@ test.describe('M7 learned suggestions and export journey', () => {
     await page.goto('/movimientos');
     await page.getByRole('button', { name: 'Añadir movimiento' }).filter({ visible: true }).click();
     const sheet = page.getByRole('dialog', { name: 'Nuevo movimiento' });
-    await expect(sheet.getByRole('textbox', { name: 'Importe' })).toBeFocused();
+    await expect(sheet.getByRole('textbox', { name: 'Importe' })).not.toBeFocused();
+    await sheet.getByRole('textbox', { name: 'Importe' }).click();
     await page.keyboard.type('4,20');
     await sheet.getByRole('button', { name: 'Más detalles' }).click();
     await sheet.getByRole('textbox', { name: 'Comercio' }).fill(merchant.toUpperCase());

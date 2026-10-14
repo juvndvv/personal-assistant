@@ -16,7 +16,7 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideChevronLeft } from '@ng-icons/lucide';
 import { PageBackLink, PageChrome } from './page-chrome';
 
-const TOP_BAR_CLEARANCE = '-64px 0px 0px 0px';
+const TOP_BAR_SELECTOR = 'ui-glass-bar[data-position="top"]';
 
 @Component({
   selector: 'app-page-header',
@@ -61,7 +61,8 @@ export class PageHeader {
 
   protected readonly chrome = inject(PageChrome);
   private readonly heading = viewChild.required<ElementRef<HTMLElement>>('heading');
-  private readonly window = inject(DOCUMENT).defaultView;
+  private readonly document = inject(DOCUMENT);
+  private readonly window = this.document.defaultView;
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly back = computed<PageBackLink | null>(() => {
@@ -82,9 +83,15 @@ export class PageHeader {
     }
     const observer = new Observer(
       ([entry]) => this.chrome.setLargeTitleVisible(this, entry?.isIntersecting ?? true),
-      { rootMargin: TOP_BAR_CLEARANCE },
+      { rootMargin: this.topBarClearance() },
     );
     observer.observe(this.heading().nativeElement);
     this.destroyRef.onDestroy(() => observer.disconnect());
+  }
+
+  private topBarClearance(): string {
+    const bottom =
+      this.document.querySelector(TOP_BAR_SELECTOR)?.getBoundingClientRect().bottom ?? 0;
+    return `-${Math.max(0, Math.round(bottom))}px 0px 0px 0px`;
   }
 }

@@ -153,13 +153,16 @@ describe('Quick add capture', () => {
     Reflect.deleteProperty(navigator, 'mediaDevices');
   });
 
-  it('offers Voz and Foto next to the amount while the manual form stays the default', async () => {
+  it('offers Voz and Foto in the thumb zone next to Guardar without opening the keyboard', async () => {
     const { dialog } = await setup();
 
     const amount = within(dialog).getByRole('textbox', { name: /importe/i });
-    await vi.waitFor(() => expect(amount).toHaveFocus());
-    expect(voiceButton(dialog)).toBeVisible();
-    expect(within(dialog).getByRole('button', { name: 'Foto' })).toBeVisible();
+    await vi.waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
+    expect(amount).not.toHaveFocus();
+    const footer = dialog.querySelector('[data-slot="sheet-footer"]') as HTMLElement;
+    expect(within(footer).getByRole('button', { name: 'Voz' })).toBeVisible();
+    expect(within(footer).getByRole('button', { name: 'Foto' })).toBeVisible();
+    expect(within(footer).getByRole('button', { name: 'Guardar' })).toBeVisible();
     expect(within(dialog).getByLabelText('Foto del ticket')).toHaveAttribute(
       'capture',
       'environment',
@@ -206,7 +209,7 @@ describe('Quick add capture', () => {
     expect(capturesApi.create.mock.calls[0]?.[0].kind).toBe('voice');
   });
 
-  it('shows the processing state with a cancel button that returns to the manual form', async () => {
+  it('shows a skeleton draft while processing with a cancel button back to the manual form', async () => {
     installMicrophone(async () => STREAM);
     const pending = new Subject<CaptureResult>();
     const { dialog, capturesApi, navigate, user } = await setup();
@@ -218,11 +221,14 @@ describe('Quick add capture', () => {
 
     const processing = await within(dialog).findByTestId('capture-processing');
     expect(processing).toHaveTextContent('Analizando la nota de voz…');
+    expect(within(processing).getByTestId('draft-skeleton')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Guardar' })).not.toBeInTheDocument();
+    await vi.waitFor(() => expect(processing).toHaveFocus());
 
     await user.click(within(processing).getByRole('button', { name: 'Cancelar' }));
 
     expect(within(dialog).queryByTestId('capture-processing')).not.toBeInTheDocument();
+    await vi.waitFor(() => expect(voiceButton(dialog)).toHaveFocus());
     expect(pending.observed).toBe(false);
     expect(within(dialog).getByRole('textbox', { name: /importe/i })).toBeVisible();
     expect(navigate).not.toHaveBeenCalled();
@@ -242,6 +248,9 @@ describe('Quick add capture', () => {
     expect(await within(dialog).findByTestId('capture-failure')).toHaveTextContent(
       CAPTURE_MESSAGES.generic,
     );
+    const announcer = within(dialog).getByTestId('capture-failure-announcer');
+    expect(announcer).toHaveAttribute('role', 'alert');
+    expect(announcer).toHaveTextContent(CAPTURE_MESSAGES.generic);
     expect(compressor.compress).toHaveBeenCalled();
     expect(capturesApi.create.mock.calls[0]?.[0]).toMatchObject({
       kind: 'photo',
@@ -358,6 +367,9 @@ describe('Quick add capture', () => {
     expect(await within(dialog).findByTestId('capture-problem')).toHaveTextContent(
       'No hay acceso al micrófono',
     );
+    const announcer = within(dialog).getByTestId('capture-problem-announcer');
+    expect(announcer).toHaveAttribute('role', 'alert');
+    expect(announcer).toHaveTextContent('No hay acceso al micrófono');
     expect(within(dialog).getByRole('textbox', { name: /importe/i })).toBeVisible();
   });
 

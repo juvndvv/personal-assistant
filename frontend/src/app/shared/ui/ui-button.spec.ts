@@ -32,4 +32,12 @@ describe('UiButton', () => {
 
     expect(submitted).toHaveBeenCalledTimes(1);
   });
+
+  it('forces the capsule radius over the base button radius', async () => {
+    await render(`<ui-button variant="secondary" size="sm">Filtros</ui-button>`, {
+      imports: [UiButton],
+    });
+
+    expect(screen.getByRole('button', { name: /filtros/i })).toHaveClass('rounded-capsule!');
+  });
 });

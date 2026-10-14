@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/angular';
 import userEvent from '@testing-library/user-event';
-import { NEVER, Observable, of } from 'rxjs';
+import { NEVER, Observable, Subject, of, throwError } from 'rxjs';
 import { AccountsApi } from '../../core/api/accounts.api';
 import { CategoriesApi } from '../../core/api/categories.api';
 import { Account, Transfer } from '../../core/api/models';
@@ -33,9 +33,10 @@ async function setup(
   existing: Transfer = aTransfer({ note: 'Hucha' }),
   listAccounts: () => Observable<Account[]> = knownAccounts,
   attachments: ReturnType<typeof quietAttachmentsApi> = quietAttachmentsApi(),
+  get: () => Observable<Transfer> = () => of(existing),
 ) {
   const api = {
-    get: vi.fn(() => of(existing)),
+    get: vi.fn(get),
     create: vi.fn(() => of(aTransfer())),
     update: vi.fn(() => of(aTransfer())),
     delete: vi.fn(() => of(undefined)),
@@ -236,6 +237,59 @@ describe('TransferFormSheet', () => {
 
     expect(api.create).not.toHaveBeenCalled();
     expect(screen.getByText('Elige la cuenta de destino.')).toBeInTheDocument();
+  });
+
+  it('shows a form-shaped skeleton instead of the form while the transfer loads', async () => {
+    const response = new Subject<Transfer>();
+    await setup(
+      { transferId: 44, fromAccountId: null },
+      aTransfer(),
+      knownAccounts,
+      quietAttachmentsApi(),
+      () => response,
+    );
+    await screen.findByRole('dialog', { name: 'Editar transferencia' });
+
+    expect(screen.getByRole('status')).toHaveTextContent('Cargando transferencia…');
+    expect(screen.getByTestId('transfer-skeleton')).toBeVisible();
+    expect(screen.queryByRole('textbox', { name: /importe/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeDisabled();
+
+    response.next(aTransfer());
+    response.complete();
+
+    const amount = await screen.findByRole('textbox', { name: /importe/i });
+    await vi.waitFor(() => expect(amount).toHaveValue('100,00'));
+    expect(screen.queryByTestId('transfer-skeleton')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeEnabled();
+  });
+
+  it('offers to retry when the transfer fails to load', async () => {
+    const get = vi
+      .fn<() => Observable<Transfer>>()
+      .mockReturnValueOnce(throwError(() => new Error('offline')))
+      .mockReturnValue(of(aTransfer()));
+    const { api, user } = await setup(
+      { transferId: 44, fromAccountId: null },
+      aTransfer(),
+      knownAccounts,
+      quietAttachmentsApi(),
+      get,
+    );
+    await screen.findByRole('dialog', { name: 'Editar transferencia' });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No se pudo cargar la transferencia.',
+    );
+    expect(screen.queryByRole('textbox', { name: /importe/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    const amount = await screen.findByRole('textbox', { name: /importe/i });
+    await vi.waitFor(() => expect(amount).toHaveValue('100,00'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(api.get).toHaveBeenCalledTimes(2);
   });
 
   it('deletes an existing transfer with both legs', async () => {

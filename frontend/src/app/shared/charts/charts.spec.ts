@@ -169,6 +169,22 @@ describe('DonutChart', () => {
 
     expect(screen.getByTestId('donut-arc').getAttribute('d')).toContain(' 1 1 ');
   });
+
+  it('prefers a segment colour over its series slot', async () => {
+    await render(DonutChart, {
+      inputs: {
+        segments: [
+          { key: '1', label: 'Nómina', value: 150000, slot: 1, color: 'var(--category-green)' },
+          { key: '2', label: 'Extras', value: 60000, slot: 2 },
+        ],
+        ariaLabel: 'Ingresos por categoría',
+      },
+    });
+
+    const arcs = screen.getAllByTestId('donut-arc');
+    expect(arcs[0].style.fill).toBe('var(--category-green)');
+    expect(arcs[1].style.fill).toBe('var(--viz-series-2)');
+  });
 });
 
 describe('StatTile and ProgressBar', () => {
@@ -186,6 +202,20 @@ describe('StatTile and ProgressBar', () => {
     expect(screen.getByTestId('stat-value')).toHaveTextContent('25 %');
     expect(screen.getByTestId('stat-value')).toHaveClass('text-success-text');
     expect(screen.getByTestId('stat-status')).toHaveTextContent('Objetivo cumplido');
+  });
+
+  it('uses tabular amounts, a tinted surface by default and a card surface on request', async () => {
+    const { rerender } = await render(StatTile, {
+      inputs: { label: 'Gastos', value: '1.575,00 €', tone: 'negative' },
+    });
+
+    const value = screen.getByTestId('stat-value');
+    expect(value).toHaveClass('amount', 'text-danger-text');
+    expect(value.parentElement).toHaveClass('bg-fill-on-card');
+
+    await rerender({ inputs: { label: 'Gastos', value: '1.575,00 €', variant: 'card' } });
+
+    expect(screen.getByTestId('stat-value').parentElement).toHaveClass('bg-card', 'shadow-card');
   });
 
   it('exposes the progress value and clamps the fill', async () => {

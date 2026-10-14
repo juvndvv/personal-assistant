@@ -18,7 +18,7 @@ import { UiGlassBar } from '../../shared/ui';
 import { PendingDrafts } from '../drafts/pending-drafts';
 import { MovementSheets } from '../transactions/movement-sheets';
 import { MovementSheetsHost } from '../transactions/movement-sheets-host';
-import { NAV_ITEMS, NavItem } from './nav-items';
+import { NAV_ITEMS, navItemMatches } from './nav-items';
 
 const ACTIVE_STROKE = '2.5';
 const IDLE_STROKE = '1.75';
@@ -26,13 +26,6 @@ const PRIMARY_SLOT = '3.75rem';
 
 function pathOf(url: string): string {
   return url.split(/[?#]/)[0] ?? '/';
-}
-
-function matches(item: NavItem, path: string): boolean {
-  if (item.exact) {
-    return path === item.path;
-  }
-  return path === item.path || path.startsWith(`${item.path}/`);
 }
 
 @Component({
@@ -50,16 +43,15 @@ function matches(item: NavItem, path: string): boolean {
     }),
   ],
   host: {
-    class:
-      'flex min-h-dvh [--shell-bottom-inset:calc(var(--tab-bar-height)+var(--tab-bar-offset)+0.75rem)] [--bottom-bar-safe-area:0px] md:[--shell-bottom-inset:0px] md:[--bottom-bar-safe-area:env(safe-area-inset-bottom)]',
+    class: 'flex min-h-dvh',
   },
   template: `
     <aside
-      class="glass glass-flat sticky top-0 z-30 hidden h-dvh w-64 shrink-0 flex-col px-3 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] md:flex"
+      class="glass glass-flat sticky top-[var(--status-banner-height,0px)] z-30 hidden h-[calc(100dvh-var(--status-banner-height,0px))] w-64 shrink-0 flex-col px-3 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] md:flex"
     >
       <p class="px-3 text-lg font-semibold text-foreground">Finanzas</p>
       <nav class="mt-6 flex flex-1 flex-col gap-1" aria-label="Navegación principal">
-        @for (item of navItems; track item.path; let index = $index) {
+        @for (item of navItems; track item.id; let index = $index) {
           @if (item.primary) {
             <button
               type="button"
@@ -111,8 +103,15 @@ function matches(item: NavItem, path: string): boolean {
     </aside>
 
     <div class="flex min-w-0 flex-1 flex-col">
-      <ui-glass-bar position="top" data-testid="top-bar">
-        <div class="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2">
+      <ui-glass-bar
+        position="top"
+        data-testid="top-bar"
+        style="
+          top: var(--status-banner-height, 0px);
+          padding-top: max(0px, env(safe-area-inset-top) - var(--status-banner-height, 0px));
+        "
+      >
+        <div class="grid w-full grid-cols-[minmax(max-content,1fr)_auto_1fr] items-center gap-2">
           <div class="flex min-w-0 items-center">
             @if (chrome.state()?.back; as back) {
               <a
@@ -126,8 +125,9 @@ function matches(item: NavItem, path: string): boolean {
           </div>
           <p
             aria-hidden="true"
-            class="max-w-[50vw] truncate text-center text-[0.9375rem] font-semibold text-foreground transition-opacity duration-200"
-            [class.opacity-0]="chrome.largeTitleVisible()"
+            data-testid="top-bar-title"
+            class="truncate text-center text-[0.9375rem] font-semibold text-foreground transition-opacity duration-200"
+            [class]="chrome.largeTitleVisible() ? 'max-w-0 opacity-0' : 'max-w-[40vw]'"
           >
             {{ chrome.state()?.title }}
           </p>
@@ -156,8 +156,10 @@ function matches(item: NavItem, path: string): boolean {
             [style.transform]="indicatorTransform()"
           ></span>
         }
-        <ul class="relative grid h-full grid-cols-[1fr_1fr_3.75rem_1fr_1fr] items-center">
-          @for (item of navItems; track item.path; let index = $index) {
+        <ul
+          class="relative grid h-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_3.75rem_minmax(0,1fr)_minmax(0,1fr)] items-center"
+        >
+          @for (item of navItems; track item.id; let index = $index) {
             <li class="flex h-full items-center justify-center">
               @if (item.primary) {
                 <button
@@ -228,7 +230,7 @@ export class ShellLayout {
 
   protected readonly activeIndex = computed(() => {
     const path = this.path();
-    return this.navItems.findIndex((item) => !item.primary && matches(item, path));
+    return this.navItems.findIndex((item) => !item.primary && navItemMatches(item, path));
   });
   protected readonly indicatorTransform = computed(() => {
     const index = this.activeIndex();

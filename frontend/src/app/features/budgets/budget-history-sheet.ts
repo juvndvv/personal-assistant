@@ -14,7 +14,7 @@ import { serverMessage } from '../../core/api/api-error';
 import { BudgetsApi } from '../../core/api/budgets.api';
 import { BudgetHistoryEntry, CategorySummary } from '../../core/api/models';
 import { formatPeriodLabel } from '../../core/date/period-label';
-import { UiButton, UiSheet, UiToast } from '../../shared/ui';
+import { UiAlert, UiButton, UiSheet, UiSkeleton, UiToast } from '../../shared/ui';
 import { budgetAmountLabel } from './budget-display';
 
 type HistoryState =
@@ -24,7 +24,7 @@ type HistoryState =
 
 @Component({
   selector: 'app-budget-history-sheet',
-  imports: [UiButton, UiSheet],
+  imports: [UiAlert, UiButton, UiSheet, UiSkeleton],
   template: `
     <ui-sheet
       [(open)]="open"
@@ -33,10 +33,18 @@ type HistoryState =
     >
       @switch (state().status) {
         @case ('loading') {
-          <p class="text-sm text-muted-foreground">Cargando historial…</p>
+          <div role="status" aria-live="polite" class="flex flex-col gap-4 py-2">
+            <span class="sr-only">Cargando historial</span>
+            @for (row of placeholders; track row) {
+              <div class="flex items-center justify-between gap-3">
+                <ui-skeleton width="45%" />
+                <ui-skeleton width="5rem" />
+              </div>
+            }
+          </div>
         }
         @case ('failed') {
-          <p role="alert" class="text-sm text-destructive">No se pudo cargar el historial.</p>
+          <ui-alert retryable (retry)="retry()">No se pudo cargar el historial.</ui-alert>
         }
         @default {
           @if (entries().length === 0) {
@@ -47,13 +55,11 @@ type HistoryState =
             <ol class="divide-y divide-border pb-2" aria-label="Cambios de presupuesto">
               @for (entry of entries(); track entry.effective_from) {
                 <li
-                  class="flex items-baseline justify-between gap-3 py-2 text-sm"
+                  class="flex min-h-11 items-center justify-between gap-3 py-2 text-sm"
                   data-testid="budget-history-entry"
                 >
                   <span class="text-foreground">Desde {{ periodName(entry.effective_from) }}</span>
-                  <span class="tabular-nums text-foreground">{{
-                    amountLabel(entry.amount_cents)
-                  }}</span>
+                  <span class="amount text-foreground">{{ amountLabel(entry.amount_cents) }}</span>
                 </li>
               }
             </ol>
@@ -61,7 +67,7 @@ type HistoryState =
               <div
                 role="group"
                 aria-label="Confirmar eliminación del presupuesto"
-                class="mt-2 flex flex-col gap-3 rounded-xl bg-destructive/10 p-3"
+                class="mt-2 flex flex-col gap-3 rounded-card bg-callout-error p-4"
               >
                 <p class="text-sm text-foreground">
                   Se borrará el presupuesto de {{ category()?.name }} en todos los periodos, junto
@@ -104,12 +110,18 @@ export class BudgetHistorySheet {
   protected readonly title = computed(() => `Historial de ${this.category()?.name ?? ''}`);
   protected readonly confirmingClear = signal(false);
   protected readonly clearing = signal(false);
-  private readonly request = computed(() => (this.open() ? this.category() : null));
+  protected readonly placeholders = [0, 1, 2];
+  private readonly retries = signal(0);
+  private readonly request = computed(() => {
+    const category = this.open() ? this.category() : null;
+    return category === null ? null : { category, attempt: this.retries() };
+  });
 
   constructor() {
     toObservable(this.request)
       .pipe(
-        filter((category): category is CategorySummary => category !== null),
+        filter((request) => request !== null),
+        map(({ category }) => category),
         tap(() => {
           this.state.set({ status: 'loading' });
           this.confirmingClear.set(false);
@@ -143,6 +155,10 @@ export class BudgetHistorySheet {
     } finally {
       this.clearing.set(false);
     }
+  }
+
+  protected retry(): void {
+    this.retries.update((count) => count + 1);
   }
 
   protected periodName(label: string): string {

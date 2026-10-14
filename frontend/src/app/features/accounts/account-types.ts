@@ -43,3 +43,25 @@ export function lastUpdatedLabel(account: Pick<Account, 'last_updated_on'>): str
     ? 'Sin movimientos'
     : `Actualizada el ${formatDate(account.last_updated_on, 'medium')}`;
 }
+
+export function isOverdrawn(account: Pick<Account, 'type' | 'balance_cents'>): boolean {
+  return account.type !== 'credit_card' && account.balance_cents < 0;
+}
+
+export function isCardDebt(account: Pick<Account, 'type' | 'balance_cents'>): boolean {
+  return account.type === 'credit_card' && account.balance_cents < 0;
+}
+
+export function balanceToneClass(account: Pick<Account, 'type' | 'balance_cents'>): string {
+  return isOverdrawn(account) ? 'text-danger-text' : 'text-foreground';
+}
+
+export function balanceLabel(account: Pick<Account, 'type' | 'balance_cents'>): string {
+  return isCardDebt(account) ? 'Deuda de la tarjeta' : 'Saldo';
+}
+
+export function groupTotalToneClass(group: Pick<AccountGroup, 'type' | 'totalCents'>): string {
+  return isOverdrawn({ type: group.type, balance_cents: group.totalCents })
+    ? 'text-danger-text'
+    : 'text-muted-foreground';
+}

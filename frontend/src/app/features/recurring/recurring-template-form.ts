@@ -63,7 +63,7 @@ export type RecurringTemplateFormErrors = Partial<Record<keyof RecurringTemplate
           (valueChange)="changeType($event)"
         />
         @if (errors().type; as message) {
-          <p role="alert" class="text-xs text-destructive">{{ message }}</p>
+          <p role="alert" class="text-xs text-danger-text">{{ message }}</p>
         }
       </div>
 

@@ -8,7 +8,6 @@ import {
   lucideDownload,
   lucideFunnel,
   lucideInbox,
-  lucidePlus,
 } from '@ng-icons/lucide';
 import { catchError, debounceTime, distinctUntilChanged, map, of, skip } from 'rxjs';
 import { transactionsCsvUrl } from '../../../core/api/exports.api';
@@ -18,8 +17,7 @@ import { formatDate } from '../../../core/date/iso-date';
 import { formatPeriodLabel } from '../../../core/date/period-label';
 import { EurPipe } from '../../../core/money/eur.pipe';
 import { PageHeader } from '../../../shared/layout/page-header';
-import { DOWNLOAD_LINK_CLASS } from '../../export/download-link-class';
-import { UiButton, UiInput } from '../../../shared/ui';
+import { UiButton, UiButtonLink, UiCard, UiInput, UiSkeleton } from '../../../shared/ui';
 import { PendingDrafts } from '../../drafts/pending-drafts';
 import { MovementSheets } from '../movement-sheets';
 import { TransactionFeed } from './transaction-feed';
@@ -47,7 +45,10 @@ const PERIOD_HISTORY = 24;
     TransactionFeed,
     TransactionFilterSheet,
     UiButton,
+    UiButtonLink,
+    UiCard,
     UiInput,
+    UiSkeleton,
   ],
   providers: [
     provideIcons({
@@ -56,18 +57,21 @@ const PERIOD_HISTORY = 24;
       lucideDownload,
       lucideFunnel,
       lucideInbox,
-      lucidePlus,
     }),
   ],
   template: `
     <app-page-header title="Movimientos" />
     @if (pendingCount() > 0) {
       <a
+        uiCard
+        variant="tinted"
+        padding="sm"
+        interactive
         routerLink="/pendientes"
-        class="mb-4 flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm font-medium text-foreground hover:bg-primary/10"
+        class="mb-4 flex items-center gap-3 px-4 text-[0.9375rem] font-medium text-foreground"
         data-testid="pending-drafts-banner"
       >
-        <ng-icon name="lucideInbox" size="20" class="text-primary-text" aria-hidden="true" />
+        <ng-icon name="lucideInbox" size="20" class="text-info-text" aria-hidden="true" />
         <span class="flex-1">
           {{
             pendingCount() === 1
@@ -99,7 +103,7 @@ const PERIOD_HISTORY = 24;
           Transferencia
         </ui-button>
         @if (exportUrl(); as url) {
-          <a [href]="url" download [class]="downloadLinkClass" data-testid="export-csv">
+          <a [href]="url" download uiButtonLink variant="outline" data-testid="export-csv">
             <ng-icon name="lucideDownload" aria-hidden="true" />
             Exportar CSV
           </a>
@@ -107,22 +111,45 @@ const PERIOD_HISTORY = 24;
       </div>
     </div>
 
-    <section
-      class="mb-4 grid grid-cols-2 gap-3 rounded-2xl border border-border bg-background p-4"
-      aria-label="Totales"
-    >
+    <section uiCard class="mb-4 grid grid-cols-2 gap-x-4 gap-y-3" aria-label="Totales">
       <p class="col-span-2 text-sm text-muted-foreground" data-testid="list-scope">{{ scope() }}</p>
       <div>
-        <p class="text-xs text-muted-foreground">Ingresos</p>
-        <p class="font-semibold tabular-nums text-success-text" data-testid="total-income">
-          {{ totals().income_cents | eur }}
-        </p>
+        <p class="text-sm text-muted-foreground">Ingresos</p>
+        @if (totalsFailed()) {
+          <p
+            class="amount mt-0.5 text-xl text-muted-foreground md:text-2xl"
+            data-testid="total-income"
+          >
+            <span aria-hidden="true">—</span><span class="sr-only">No disponible</span>
+          </p>
+        } @else if (totals(); as current) {
+          <p
+            class="amount mt-0.5 text-xl md:text-2xl"
+            [class]="current.income_cents > 0 ? 'text-income' : 'text-foreground'"
+            data-testid="total-income"
+          >
+            {{ current.income_cents > 0 ? '+' : '' }}{{ current.income_cents | eur }}
+          </p>
+        } @else {
+          <ui-skeleton class="mt-1.5 block" shape="amount" width="7rem" height="1.75rem" />
+        }
       </div>
       <div>
-        <p class="text-xs text-muted-foreground">Gastos</p>
-        <p class="font-semibold tabular-nums text-foreground" data-testid="total-expense">
-          {{ totals().expense_cents | eur }}
-        </p>
+        <p class="text-sm text-muted-foreground">Gastos</p>
+        @if (totalsFailed()) {
+          <p
+            class="amount mt-0.5 text-xl text-muted-foreground md:text-2xl"
+            data-testid="total-expense"
+          >
+            <span aria-hidden="true">—</span><span class="sr-only">No disponible</span>
+          </p>
+        } @else if (totals(); as current) {
+          <p class="amount mt-0.5 text-xl text-expense md:text-2xl" data-testid="total-expense">
+            {{ current.expense_cents | eur }}
+          </p>
+        } @else {
+          <ui-skeleton class="mt-1.5 block" shape="amount" width="7rem" height="1.75rem" />
+        }
       </div>
     </section>
 
@@ -130,17 +157,8 @@ const PERIOD_HISTORY = 24;
       [query]="listQuery()"
       [accountScoped]="filters().accountIds.length > 0"
       (metaChange)="totals.set($event.totals)"
+      (failedChange)="totalsFailed.set($event)"
     />
-    <div class="h-20" aria-hidden="true"></div>
-
-    <button
-      type="button"
-      class="fixed end-4 bottom-24 z-30 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg md:bottom-8"
-      aria-label="Nuevo movimiento"
-      (click)="sheets.openQuickAdd()"
-    >
-      <ng-icon name="lucidePlus" size="28" aria-hidden="true" />
-    </button>
 
     <app-transaction-filter-sheet
       [(open)]="filtersOpen"
@@ -158,7 +176,8 @@ export class TransactionsPage {
   protected readonly pendingCount = inject(PendingDrafts).count;
 
   protected readonly filtersOpen = signal(false);
-  protected readonly totals = signal<TransactionTotals>({ income_cents: 0, expense_cents: 0 });
+  protected readonly totals = signal<TransactionTotals | null>(null);
+  protected readonly totalsFailed = signal(false);
 
   protected readonly filters = toSignal(
     this.route.queryParamMap.pipe(map(filtersFromQueryParams)),
@@ -185,7 +204,6 @@ export class TransactionsPage {
     return filtersToListQuery(filters, this.currentPeriod()?.label ?? null);
   });
 
-  protected readonly downloadLinkClass = DOWNLOAD_LINK_CLASS;
   protected readonly exportUrl = computed(() => {
     const query = this.listQuery();
     return query === null ? null : transactionsCsvUrl(query);

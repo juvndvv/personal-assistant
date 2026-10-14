@@ -19,11 +19,10 @@ const FILL: Record<ProgressTone, string> = {
       [attr.aria-valuemax]="max()"
       [attr.aria-valuenow]="value()"
       [attr.aria-valuetext]="valueText()"
-      class="h-1.5 w-full overflow-hidden rounded-full"
-      style="background: var(--viz-track)"
+      class="h-2 w-full overflow-hidden rounded-capsule bg-[var(--viz-track)]"
     >
       <div
-        class="h-full rounded-full transition-[width] duration-200"
+        class="h-full rounded-capsule transition-[width] duration-200 motion-reduce:transition-none"
         [style.width.%]="percent()"
         [style.background]="fill()"
         data-testid="progress-fill"

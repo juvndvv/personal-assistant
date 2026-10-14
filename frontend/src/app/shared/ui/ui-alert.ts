@@ -35,7 +35,7 @@ const TONES: Record<UiAlertTone, ToneStyle> = {
     icon: 'lucideTriangleAlert',
     surface: 'bg-callout-warning',
     accent: 'text-warning-text',
-    role: 'alert',
+    role: 'status',
   },
   info: {
     icon: 'lucideInfo',

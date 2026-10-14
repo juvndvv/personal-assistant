@@ -13,7 +13,7 @@ import { AccountsApi } from '../../core/api/accounts.api';
 import { conflictCode, serverMessage, validationErrors } from '../../core/api/api-error';
 import { Account, AccountInput } from '../../core/api/models';
 import { PageHeader } from '../../shared/layout/page-header';
-import { UiToast } from '../../shared/ui';
+import { UiAlert, UiCard, UiSkeleton, UiToast } from '../../shared/ui';
 import { AccountForm, AccountFormErrors } from './account-form';
 
 const EDITABLE_FIELDS = new Set<string>([
@@ -28,16 +28,18 @@ const OPENING_DATE_CONFLICT = 'Hay movimientos anteriores a esa fecha. Elige una
 
 @Component({
   selector: 'app-account-editor-page',
-  imports: [AccountForm, PageHeader],
+  imports: [AccountForm, PageHeader, UiAlert, UiCard, UiSkeleton],
   template: `
-    <app-page-header [title]="title()" />
-    @if (failure(); as message) {
-      <p role="alert" class="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-        {{ message }}
-      </p>
+    <app-page-header [title]="title()" [backLink]="backLink()" [backLabel]="backLabel()" />
+    @if (loadFailed()) {
+      <ui-alert class="mb-4" retryable [retrying]="loading()" (retry)="reload()">
+        No se pudo cargar la cuenta.
+      </ui-alert>
+    } @else if (failure(); as message) {
+      <ui-alert class="mb-4">{{ message }}</ui-alert>
     }
     @if (ready()) {
-      <section class="rounded-2xl border border-border bg-background p-4 md:p-6">
+      <section uiCard padding="lg" class="max-w-2xl">
         <app-account-form
           [account]="account()"
           [settlementCandidates]="candidates()"
@@ -47,6 +49,18 @@ const OPENING_DATE_CONFLICT = 'Hay movimientos anteriores a esa fecha. Elige una
           (cancelled)="leave()"
         />
       </section>
+    } @else if (!loadFailed()) {
+      <ui-card padding="lg" class="max-w-2xl">
+        <div role="status" aria-live="polite" class="flex flex-col gap-5">
+          <span class="sr-only">Cargando formulario</span>
+          @for (field of skeletonFields; track field) {
+            <div>
+              <ui-skeleton width="6rem" />
+              <ui-skeleton class="mt-2" height="2.75rem" />
+            </div>
+          }
+        </div>
+      </ui-card>
     }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -64,6 +78,14 @@ export class AccountEditorPage implements OnInit {
   protected readonly saving = signal(false);
   protected readonly ready = signal(false);
   protected readonly failure = signal<string | null>(null);
+  protected readonly loadFailed = signal(false);
+  protected readonly loading = signal(false);
+  protected readonly skeletonFields = [0, 1, 2, 3];
+  protected readonly backLink = computed(() => {
+    const id = this.id();
+    return id === undefined ? '/cuentas' : `/cuentas/${id}`;
+  });
+  protected readonly backLabel = computed(() => (this.id() === undefined ? 'Cuentas' : 'Cuenta'));
   protected readonly title = computed(() =>
     this.id() === undefined ? 'Nueva cuenta' : 'Editar cuenta',
   );
@@ -95,7 +117,13 @@ export class AccountEditorPage implements OnInit {
     void this.router.navigateByUrl(current === null ? '/cuentas' : `/cuentas/${current.id}`);
   }
 
+  protected reload(): void {
+    void this.load();
+  }
+
   private async load(): Promise<void> {
+    this.loading.set(true);
+    this.loadFailed.set(false);
     try {
       const id = this.id();
       const [candidates, account] = await Promise.all([
@@ -106,7 +134,9 @@ export class AccountEditorPage implements OnInit {
       this.account.set(account);
       this.ready.set(true);
     } catch {
-      this.failure.set('No se pudo cargar la cuenta.');
+      this.loadFailed.set(true);
+    } finally {
+      this.loading.set(false);
     }
   }
 

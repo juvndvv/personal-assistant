@@ -16,6 +16,7 @@ import { MovementSheets } from '../../transactions/movement-sheets';
 import { aTransaction, aTransfer } from '../../transactions/testing/transaction-fixtures';
 import { PendingDrafts } from '../pending-drafts';
 import { aCapture, aDraft, aDraftPage, anAttachment } from '../testing/draft-fixtures';
+import { REFERENCE_LOAD_FAILED_MESSAGE } from '../../transactions/reference-load-alert';
 import { DraftReviewPage, REVIEW_MESSAGES } from './draft-review.page';
 
 function category(id: number, name: string, kind: Category['kind']): Category {
@@ -100,6 +101,10 @@ function fieldContainer(field: string): HTMLElement {
 }
 
 describe('DraftReviewPage', () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
   it('prefills the form from the proposal', async () => {
     await setup(aDraft());
 
@@ -117,6 +122,12 @@ describe('DraftReviewPage', () => {
     );
   });
 
+  it('abbreviates the transfer segment on narrow screens', async () => {
+    await setup(aDraft());
+
+    expect(screen.getByRole('radio', { name: 'Transf.' })).toBeInTheDocument();
+  });
+
   it('highlights low-confidence fields with the warning state and an icon', async () => {
     await setup(aDraft({ low_confidence_fields: ['category_id', 'date'] }));
 
@@ -126,10 +137,27 @@ describe('DraftReviewPage', () => {
     expect(within(categoryField).getByText('Revisa este dato')).toBeVisible();
     expect(within(categoryField).getByRole('combobox')).toHaveClass('border-warning');
     expect(fieldContainer('date')).toHaveAttribute('data-low-confidence', 'true');
+    expect(within(categoryField).getByTestId('field-source-base')).toHaveClass('bg-card');
 
     const amountField = fieldContainer('amount_cents');
     expect(amountField).toHaveAttribute('data-low-confidence', 'false');
     expect(within(amountField).queryByText('Revisa este dato')).not.toBeInTheDocument();
+  });
+
+  it('describes each flagged control with the low-confidence warning', async () => {
+    await setup(aDraft({ low_confidence_fields: ['category_id', 'type'] }));
+
+    await vi.waitFor(() =>
+      expect(screen.getByRole('combobox', { name: /categoría/i })).toHaveAccessibleDescription(
+        'Revisa este dato',
+      ),
+    );
+    expect(
+      screen.getByRole('radiogroup', { name: 'Tipo de movimiento' }),
+    ).toHaveAccessibleDescription('Revisa este dato');
+    expect(screen.getByRole('combobox', { name: /cuenta/i })).not.toHaveAccessibleDescription(
+      /Revisa este dato/,
+    );
   });
 
   it('shows where each value came from', async () => {
@@ -164,9 +192,11 @@ describe('DraftReviewPage', () => {
   it('clears the highlight once the user changes the flagged value', async () => {
     const { user } = await setup(aDraft({ low_confidence_fields: ['category_id'] }));
 
-    await user.selectOptions(screen.getByRole('combobox', { name: /categoría/i }), '20');
+    const category = screen.getByRole('combobox', { name: /categoría/i });
+    await user.selectOptions(category, '20');
 
     expect(fieldContainer('category_id')).toHaveAttribute('data-low-confidence', 'false');
+    await vi.waitFor(() => expect(category).not.toHaveAttribute('aria-describedby'));
   });
 
   it('confirms an expense with draft_id and tags, then leaves for the movements list', async () => {
@@ -276,6 +306,74 @@ describe('DraftReviewPage', () => {
     expect(screen.getByText('Elige una categoría.')).toBeInTheDocument();
   });
 
+  it('scrolls to and focuses the first invalid field when Confirmar fails validation', async () => {
+    const draft = aDraft({
+      proposal: { ...aDraft().proposal, amount_cents: null, category_id: null },
+    });
+    const { user } = await setup(draft);
+
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+
+    await vi.waitFor(() => expect(document.activeElement).toHaveAttribute('aria-invalid', 'true'));
+    expect(document.activeElement).toHaveAccessibleName(/importe/i);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith(
+      expect.objectContaining({ block: 'center' }),
+    );
+  });
+
+  it('focuses the failure message when saving fails', async () => {
+    const { transactionsApi, user } = await setup(aDraft());
+    transactionsApi.create.mockReturnValueOnce(
+      throwError(() => new HttpErrorResponse({ status: 500, error: { message: 'Caído' } })),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+
+    const failure = await screen.findByTestId('review-failure');
+    await vi.waitFor(() => expect(failure).toHaveFocus());
+  });
+
+  it('reserves room for the fixed action bar from the bar size tokens', async () => {
+    await setup(aDraft());
+
+    const spacer = screen.getByTestId('review-actions').previousElementSibling;
+    expect(spacer).toHaveClass('h-[calc(var(--bottom-bar-block-size)+0.5rem)]', 'md:hidden');
+  });
+
+  it('offers a retry when accounts and categories fail to load', async () => {
+    const accountId = aDraft().proposal.account_id ?? 3;
+    const accountsList = vi
+      .fn()
+      .mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500 })))
+      .mockReturnValue(of([anAccount({ id: accountId, name: 'BBVA' })]));
+    await render(DraftReviewPage, {
+      providers: [
+        provideRouter([]),
+        { provide: DraftsApi, useValue: { get: vi.fn(() => of(aDraft())), list: vi.fn() } },
+        { provide: TransactionsApi, useValue: { create: vi.fn() } },
+        { provide: TransfersApi, useValue: { create: vi.fn() } },
+        { provide: AccountsApi, useValue: { list: accountsList } },
+        { provide: CategoriesApi, useValue: { list: vi.fn(() => of(TREE)) } },
+        { provide: TagsApi, useValue: { list: vi.fn(() => of([])) } },
+        { provide: UiToast, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn() } },
+      ],
+      inputs: { id: '88' },
+    });
+
+    expect(await screen.findByTestId('reference-load-failed')).toHaveTextContent(
+      REFERENCE_LOAD_FAILED_MESSAGE,
+    );
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    await vi.waitFor(() =>
+      expect(screen.queryByTestId('reference-load-failed')).not.toBeInTheDocument(),
+    );
+    await vi.waitFor(() =>
+      expect(screen.getByRole('combobox', { name: /^cuenta/i })).toHaveValue(String(accountId)),
+    );
+  });
+
   it('shows the failure message and uses the transcript as description', async () => {
     const draft = aDraft({
       proposal: {
@@ -295,6 +393,9 @@ describe('DraftReviewPage', () => {
     await setup(draft);
 
     expect(screen.getByTestId('capture-failed')).toHaveTextContent(REVIEW_MESSAGES.failed);
+    const announcer = screen.getByTestId('capture-failed-announcer');
+    expect(announcer).toHaveAttribute('role', 'alert');
+    await vi.waitFor(() => expect(announcer).toHaveTextContent(REVIEW_MESSAGES.failed));
     expect(screen.getByRole('textbox', { name: 'Descripción' })).toHaveValue(
       'Veinte euros en Mercadona con la Visa',
     );
@@ -343,6 +444,77 @@ describe('DraftReviewPage', () => {
 
     expect(await screen.findByText(REVIEW_MESSAGES.notPending)).toBeInTheDocument();
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('keeps Confirmar and Descartar in the sticky glass action bar', async () => {
+    await setup(aDraft());
+
+    const bar = screen.getByTestId('review-actions');
+    expect(bar.tagName.toLowerCase()).toBe('ui-glass-bar');
+    expect(bar).toHaveAttribute('data-position', 'bottom');
+    expect(bar).toHaveClass('fixed', 'md:sticky', 'rounded-capsule!');
+    expect(within(bar).getByRole('button', { name: 'Confirmar' })).toBeInTheDocument();
+    expect(within(bar).getByRole('button', { name: 'Descartar' })).toBeInTheDocument();
+  });
+
+  it('collapses the original capture behind a toggle above the form on mobile', async () => {
+    const { user } = await setup(aDraft());
+
+    const toggle = screen.getByRole('button', { name: 'Ver captura original' });
+    const content = document.getElementById('capture-source-content') as HTMLElement;
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(content).toHaveClass('hidden', 'md:flex');
+
+    await user.click(toggle);
+
+    expect(screen.getByRole('button', { name: 'Ocultar captura original' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(content).not.toHaveClass('hidden');
+  });
+
+  it('summarises how many highlighted fields still need a look', async () => {
+    const { user } = await setup(aDraft({ low_confidence_fields: ['category_id', 'merchant'] }));
+
+    expect(screen.getByTestId('review-hint')).toHaveTextContent('2 datos marcados para revisar');
+
+    await user.clear(screen.getByRole('textbox', { name: 'Comercio' }));
+    await user.type(screen.getByRole('textbox', { name: 'Comercio' }), 'Lidl');
+
+    expect(screen.getByTestId('review-hint')).toHaveTextContent('1 dato marcado para revisar');
+  });
+
+  it('offers a retry when the draft fails to load', async () => {
+    const draftsApi = {
+      get: vi
+        .fn()
+        .mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500 })))
+        .mockReturnValue(of(aDraft())),
+      list: vi.fn(() => of(aDraftPage([]))),
+    };
+    await render(DraftReviewPage, {
+      providers: [
+        provideRouter([]),
+        { provide: DraftsApi, useValue: draftsApi },
+        { provide: TransactionsApi, useValue: { create: vi.fn() } },
+        { provide: TransfersApi, useValue: { create: vi.fn() } },
+        { provide: AccountsApi, useValue: { list: vi.fn(() => of([anAccount({ id: 7 })])) } },
+        { provide: CategoriesApi, useValue: { list: vi.fn(() => of(TREE)) } },
+        { provide: TagsApi, useValue: { list: vi.fn(() => of([])) } },
+        { provide: UiToast, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn() } },
+      ],
+      inputs: { id: '88' },
+    });
+
+    expect(await screen.findByText(REVIEW_MESSAGES.loadFailed)).toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    expect(
+      await screen.findByRole('form', { name: 'Borrador del movimiento' }),
+    ).toBeInTheDocument();
+    expect(draftsApi.get).toHaveBeenCalledTimes(2);
   });
 
   it('uses the draft cached by the capture flow without refetching', async () => {

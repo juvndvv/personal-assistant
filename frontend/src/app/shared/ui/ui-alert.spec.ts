@@ -14,6 +14,15 @@ describe('UiAlert', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
+  it('keeps persistent warnings polite instead of assertive', async () => {
+    await render(`<ui-alert tone="warning">Cuentas sin actualizar.</ui-alert>`, {
+      imports: [UiAlert],
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('Cuentas sin actualizar.');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('uses a polite status for informative tones', async () => {
     await render(`<ui-alert tone="info">Hay 2 borradores.</ui-alert>`, { imports: [UiAlert] });
 

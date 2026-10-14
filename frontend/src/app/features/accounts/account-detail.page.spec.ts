@@ -75,8 +75,26 @@ describe('AccountDetailPage', () => {
     await setup(anAccount({ id: 1, balance_cents: -5000, last_updated_on: '2026-10-12' }));
 
     expect(await screen.findByTestId('account-balance')).toHaveTextContent('-50,00 €');
-    expect(screen.getByTestId('account-balance')).toHaveClass('text-destructive');
+    expect(screen.getByTestId('account-balance')).toHaveClass('text-danger-text');
+    expect(screen.getByText('La cuenta está en descubierto.')).toBeInTheDocument();
     expect(screen.getByText('Actualizada el 12 oct 2026')).toBeInTheDocument();
+  });
+
+  it('presents a negative card balance as debt without alarm colours', async () => {
+    await setup(anAccount({ id: 1, type: 'credit_card', balance_cents: -12000 }));
+
+    expect(await screen.findByTestId('account-balance')).toHaveClass('text-foreground');
+    expect(screen.getByText('Deuda de la tarjeta')).toBeInTheDocument();
+    expect(screen.queryByText('La cuenta está en descubierto.')).not.toBeInTheDocument();
+  });
+
+  it('links back to the accounts list from the page header', async () => {
+    await setup();
+
+    expect(await screen.findByRole('link', { name: 'Cuentas' })).toHaveAttribute(
+      'href',
+      '/cuentas',
+    );
   });
 
   it('suggests archiving when the account has movements', async () => {

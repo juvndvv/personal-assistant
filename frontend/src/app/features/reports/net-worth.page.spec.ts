@@ -1,6 +1,8 @@
 import { provideRouter } from '@angular/router';
 import { render, screen, within } from '@testing-library/angular';
-import { of, throwError } from 'rxjs';
+import userEvent from '@testing-library/user-event';
+import { NEVER, Observable, of, throwError } from 'rxjs';
+import { NetWorth } from '../../core/api/models';
 import { ReportsApi } from '../../core/api/reports.api';
 import { formatCents } from '../../core/money/format-cents';
 import { NetWorthPage } from './net-worth.page';
@@ -8,7 +10,7 @@ import { aNetWorth, aNetWorthAccount } from './testing/report-fixtures';
 
 const plain = (text: string) => text.replace(/\s+/g, ' ');
 
-async function setup(netWorth = () => of(aNetWorth())) {
+async function setup(netWorth: () => Observable<NetWorth> = () => of(aNetWorth())) {
   await render(NetWorthPage, {
     providers: [provideRouter([]), { provide: ReportsApi, useValue: { netWorth } }],
   });
@@ -97,9 +99,28 @@ describe('NetWorthPage', () => {
     expect(screen.queryByTestId('stale-warning')).not.toBeInTheDocument();
   });
 
-  it('reports a failure', async () => {
-    await setup(() => throwError(() => new Error('offline')));
+  it('reports a failure and retries', async () => {
+    const netWorth = vi.fn((): Observable<NetWorth> => throwError(() => new Error('offline')));
+    await setup(netWorth);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cargar el patrimonio.');
+
+    netWorth.mockReturnValue(of(aNetWorth()));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    expect(await screen.findByTestId('net-worth-total')).toHaveTextContent(
+      plain(formatCents(1834500)),
+    );
+    expect(screen.queryByText(/No se pudo cargar el patrimonio/)).not.toBeInTheDocument();
+  });
+
+  it('shows a skeleton while loading', async () => {
+    await setup(() => NEVER);
+
+    const statuses = await screen.findAllByRole('status');
+    expect(statuses.map((status) => status.textContent)).toEqual(
+      expect.arrayContaining([expect.stringContaining('Cargando patrimonio')]),
+    );
+    expect(screen.queryByTestId('net-worth-total')).not.toBeInTheDocument();
   });
 });

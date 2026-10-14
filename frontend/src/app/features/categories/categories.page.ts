@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import { RouterLink } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideArchive,
@@ -17,11 +16,14 @@ import { CategoriesApi } from '../../core/api/categories.api';
 import { Category, CategoryKind } from '../../core/api/models';
 import { PageHeader } from '../../shared/layout/page-header';
 import {
+  UiAlert,
   UiBadge,
   UiButton,
+  UiCard,
   UiCheckbox,
   UiDialog,
   UiDialogFooter,
+  UiSkeletonList,
   UiTabItem,
   UiTabs,
   UiToast,
@@ -49,12 +51,14 @@ const KIND_TABS: readonly UiTabItem[] = [
     NgIcon,
     NgTemplateOutlet,
     PageHeader,
-    RouterLink,
+    UiAlert,
     UiBadge,
     UiButton,
+    UiCard,
     UiCheckbox,
     UiDialog,
     UiDialogFooter,
+    UiSkeletonList,
     UiTabs,
   ],
   providers: [
@@ -69,12 +73,12 @@ const KIND_TABS: readonly UiTabItem[] = [
     }),
   ],
   template: `
-    <a
-      routerLink="/mas"
-      class="mb-4 inline-flex min-w-11 items-center text-sm text-primary-text hover:underline"
-      >← Más</a
-    >
-    <app-page-header title="Categorías" subtitle="Organiza tus gastos e ingresos en dos niveles." />
+    <app-page-header
+      title="Categorías"
+      subtitle="Organiza tus gastos e ingresos en dos niveles."
+      backLink="/mas"
+      backLabel="Más"
+    />
 
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
       <ui-tabs
@@ -96,9 +100,15 @@ const KIND_TABS: readonly UiTabItem[] = [
 
     <section id="category-panel" role="tabpanel" [attr.aria-labelledby]="'category-kind-' + kind()">
       @if (loadFailed()) {
-        <p role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <ui-alert class="mb-4" retryable [retrying]="loading()" (retry)="reload()">
           No se pudieron cargar las categorías.
-        </p>
+        </ui-alert>
+      }
+
+      @if (!loaded()) {
+        <ui-card padding="none">
+          <ui-skeleton-list label="Cargando categorías" [rows]="5" />
+        </ui-card>
       }
 
       <ul
@@ -107,7 +117,9 @@ const KIND_TABS: readonly UiTabItem[] = [
       >
         @for (parent of tree(); track parent.id; let first = $first; let last = $last) {
           <li
-            class="rounded-2xl border border-border bg-background"
+            uiCard
+            padding="none"
+            class="overflow-hidden"
             [attr.data-testid]="'category-' + parent.id"
           >
             <ng-container
@@ -116,7 +128,7 @@ const KIND_TABS: readonly UiTabItem[] = [
             />
             @if (parent.children.length > 0) {
               <ul
-                class="border-t border-border"
+                class="divide-y divide-hairline border-t border-border"
                 [attr.aria-label]="'Subcategorías de ' + parent.name"
               >
                 @for (
@@ -142,7 +154,7 @@ const KIND_TABS: readonly UiTabItem[] = [
         }
       </ul>
 
-      <div class="mt-4">
+      <div class="mt-4" [class.hidden]="!loaded()">
         <ui-button variant="outline" (clicked)="createTopLevel()">
           <ng-icon name="lucidePlus" aria-hidden="true" />
           Nueva categoría
@@ -156,9 +168,8 @@ const KIND_TABS: readonly UiTabItem[] = [
         <span class="flex min-w-0 flex-1 basis-40 items-center">
           <span
             class="truncate"
-            [class]="
-              category.parent_id === null ? 'font-medium text-foreground' : 'text-foreground'
-            "
+            [class.font-medium]="category.parent_id === null"
+            [class]="category.archived_at === null ? 'text-foreground' : 'text-muted-foreground'"
           >
             {{ category.name }}
           </span>
@@ -244,9 +255,7 @@ const KIND_TABS: readonly UiTabItem[] = [
 
     <ui-dialog [(open)]="deleteOpen" title="Eliminar categoría" [description]="deleteDescription()">
       @if (deleteError(); as message) {
-        <p role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {{ message }}
-        </p>
+        <ui-alert>{{ message }}</ui-alert>
       }
       <div uiDialogFooter class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <ui-button variant="outline" (clicked)="deleteOpen.set(false)">Cancelar</ui-button>
@@ -267,6 +276,8 @@ export class CategoriesPage {
   protected readonly includeArchived = signal(false);
   protected readonly tree = signal<Category[]>([]);
   protected readonly loadFailed = signal(false);
+  protected readonly loaded = signal(false);
+  protected readonly loading = signal(false);
   protected readonly busy = signal(false);
   protected readonly editorOpen = signal(false);
   protected readonly editorTarget = signal<CategoryEditorTarget | null>(null);
@@ -401,8 +412,13 @@ export class CategoriesPage {
     await this.load();
   }
 
+  protected reload(): void {
+    void this.load();
+  }
+
   private async load(): Promise<void> {
     const request = ++this.latestRequest;
+    this.loading.set(true);
     try {
       const tree = await firstValueFrom(
         this.api.list({ kind: this.kind(), includeArchived: this.includeArchived() }),
@@ -414,6 +430,11 @@ export class CategoriesPage {
     } catch {
       if (request === this.latestRequest) {
         this.loadFailed.set(true);
+      }
+    } finally {
+      if (request === this.latestRequest) {
+        this.loaded.set(true);
+        this.loading.set(false);
       }
     }
   }

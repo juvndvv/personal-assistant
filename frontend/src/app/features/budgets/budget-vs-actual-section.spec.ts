@@ -4,6 +4,7 @@ import { of, throwError } from 'rxjs';
 import { BudgetVsActual } from '../../core/api/models';
 import { ReportsApi } from '../../core/api/reports.api';
 import { formatCents } from '../../core/money/format-cents';
+import { referenceDataProviders } from '../transactions/testing/reference-fakes';
 import { BudgetVsActualSection } from './budget-vs-actual-section';
 import { aBudgetVsActual, anEmptyBudgetVsActual } from './testing/budget-fixtures';
 
@@ -12,7 +13,11 @@ const plain = (text: string | null) => (text ?? '').replace(/\s+/g, ' ').trim();
 async function setup(report: () => ReturnType<ReportsApi['budgetVsActual']>, period = '2026-10') {
   const reports = { budgetVsActual: vi.fn(report) };
   const view = await render(BudgetVsActualSection, {
-    providers: [provideRouter([]), { provide: ReportsApi, useValue: reports }],
+    providers: [
+      provideRouter([]),
+      { provide: ReportsApi, useValue: reports },
+      ...referenceDataProviders(),
+    ],
     inputs: { period },
   });
   return { reports, view };

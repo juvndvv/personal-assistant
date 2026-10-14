@@ -15,18 +15,14 @@ import { CategoriesApi } from '../../core/api/categories.api';
 import { Category, PeriodLabel, TrendPoint } from '../../core/api/models';
 import { ReportsApi } from '../../core/api/reports.api';
 import { BarChart, ChartSeries, LineChart, formatBasisPoints } from '../../shared/charts';
-import { UiSelect, UiSelectOption } from '../../shared/ui';
+import { UiAlert, UiCard, UiSelect, UiSelectOption, UiSkeleton } from '../../shared/ui';
 import { TREND_PERIODS, trendCategories } from './reports-display';
 
 @Component({
   selector: 'app-trend-section',
-  imports: [BarChart, LineChart, UiSelect],
+  imports: [BarChart, LineChart, UiAlert, UiCard, UiSelect, UiSkeleton],
   template: `
-    <section
-      class="rounded-2xl border border-border bg-background p-5"
-      aria-labelledby="trend-heading"
-      data-testid="trend-section"
-    >
+    <section uiCard padding="lg" aria-labelledby="trend-heading" data-testid="trend-section">
       <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 id="trend-heading" class="text-lg font-semibold text-foreground">
@@ -46,7 +42,9 @@ import { TREND_PERIODS, trendCategories } from './reports-display';
         </div>
       </div>
       @if (failed()) {
-        <p role="alert" class="text-sm text-destructive">No se pudo cargar la evolución.</p>
+        <ui-alert retryable [retrying]="busy()" (retry)="retry()">
+          No se pudo cargar la evolución.
+        </ui-alert>
       } @else if (points().length > 0) {
         <app-bar-chart
           ariaLabel="Ingresos y gastos por periodo"
@@ -58,11 +56,17 @@ import { TREND_PERIODS, trendCategories } from './reports-display';
           [busy]="busy()"
           (selectCategory)="selectPeriod.emit($event)"
         />
+      } @else if (loading()) {
+        <div role="status" aria-live="polite" data-testid="trend-loading">
+          <span class="sr-only">Cargando evolución</span>
+          <ui-skeleton shape="block" height="13rem" />
+        </div>
       }
     </section>
 
     <section
-      class="mt-6 rounded-2xl border border-border bg-background p-5"
+      uiCard
+      padding="lg"
       aria-labelledby="savings-history-heading"
       data-testid="savings-history"
     >
@@ -72,7 +76,9 @@ import { TREND_PERIODS, trendCategories } from './reports-display';
       <p class="mb-3 text-xs text-muted-foreground">
         (Ingresos − gastos) / ingresos. Sin valor en periodos sin ingresos.
       </p>
-      @if (points().length > 0) {
+      @if (failed()) {
+        <p class="text-sm text-muted-foreground">No disponible hasta que se cargue la evolución.</p>
+      } @else if (points().length > 0) {
         <app-line-chart
           ariaLabel="Tasa de ahorro por periodo"
           [categories]="categories()"
@@ -80,10 +86,15 @@ import { TREND_PERIODS, trendCategories } from './reports-display';
           [valueFormatter]="formatRate"
           [busy]="busy()"
         />
+      } @else if (loading()) {
+        <div role="status" aria-live="polite">
+          <span class="sr-only">Cargando tasa de ahorro</span>
+          <ui-skeleton shape="block" height="12rem" />
+        </div>
       }
     </section>
   `,
-  host: { class: 'block' },
+  host: { class: 'flex flex-col gap-6' },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TrendSection {
@@ -101,6 +112,10 @@ export class TrendSection {
   protected readonly busy = signal(false);
   protected readonly failed = signal(false);
   protected readonly categoryValue = signal<string | null>(null);
+  protected readonly loading = computed(
+    () => this.points().length === 0 && !this.failed() && (this.busy() || this.until() === null),
+  );
+  private readonly retries = signal(0);
   private readonly expenseCategories = signal<Category[]>([]);
 
   protected readonly categoryOptions = computed<UiSelectOption[]>(() =>
@@ -167,6 +182,7 @@ export class TrendSection {
       toObservable(this.until),
       toObservable(this.categoryValue),
       toObservable(this.reload),
+      toObservable(this.retries),
     ])
       .pipe(
         filter(([until]) => until !== null),
@@ -200,5 +216,9 @@ export class TrendSection {
         }
       });
     });
+  }
+
+  protected retry(): void {
+    this.retries.update((count) => count + 1);
   }
 }
