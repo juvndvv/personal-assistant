@@ -12,20 +12,20 @@ How feature screens use the shared design system. The source of truth for the de
 
 ## Token cheat sheet
 
-| Need | Class |
-| --- | --- |
-| Primary / secondary / tertiary text | `text-foreground` / `text-muted-foreground` / `text-subtle-foreground` (metadata only) |
-| Inline link | `text-link` (`text-primary-text` is now an alias of the link colour) |
-| Page / grouped / card surface | `bg-background` / `bg-grouped` / `bg-card` |
-| Chips, tracks, quiet fills | `bg-muted` (tertiary), `bg-fill-strong` (selected) |
-| Hover / pressed overlay | `hover:bg-hover`, `active:bg-pressed` |
-| Hairline / regular / strong border | `border-hairline` / `border-border` / `border-border-strong` |
-| Feedback text | `text-danger-text`, `text-warning-text`, `text-success-text`, `text-info-text` |
-| Badge tints | `bg-tint-green`, `bg-tint-red`, `bg-tint-orange`, `bg-tint-blue` (with the solid semantic text colour on top) |
-| Callout backgrounds | `bg-callout-error`, `bg-callout-warning`, `bg-callout-success`, `bg-callout-info` |
-| Money | `text-income`, `text-expense`, `text-transfer` |
-| Card shadow | `shadow-card` (none in dark mode) |
-| Spring easing | `ease-spring` (sheets, indicators); hovers use `duration-150` |
+| Need                                | Class                                                                                                         |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Primary / secondary / tertiary text | `text-foreground` / `text-muted-foreground` / `text-subtle-foreground` (metadata only)                        |
+| Inline link                         | `text-link` (`text-primary-text` is now an alias of the link colour)                                          |
+| Page / grouped / card surface       | `bg-background` / `bg-grouped` / `bg-card`                                                                    |
+| Chips, tracks, quiet fills          | `bg-muted` (tertiary), `bg-fill-strong` (selected)                                                            |
+| Hover / pressed overlay             | `hover:bg-hover`, `active:bg-pressed`                                                                         |
+| Hairline / regular / strong border  | `border-hairline` / `border-border` / `border-border-strong`                                                  |
+| Feedback text                       | `text-danger-text`, `text-warning-text`, `text-success-text`, `text-info-text`                                |
+| Badge tints                         | `bg-tint-green`, `bg-tint-red`, `bg-tint-orange`, `bg-tint-blue` (with the solid semantic text colour on top) |
+| Callout backgrounds                 | `bg-callout-error`, `bg-callout-warning`, `bg-callout-success`, `bg-callout-info`                             |
+| Money                               | `text-income`, `text-expense`, `text-transfer`                                                                |
+| Card shadow                         | `shadow-card` (none in dark mode)                                                                             |
+| Spring easing                       | `ease-spring` (sheets, indicators); hovers use `duration-150`                                                 |
 
 `bg-primary` is monochrome: black on light, white on dark. Use it only for the main action.
 
@@ -34,15 +34,22 @@ How feature screens use the shared design system. The source of truth for the de
 This replaces every hand-written `rounded-2xl border border-border bg-background p-5` string. It is a directive, so it works on any element:
 
 ```html
-<ui-card>…</ui-card>                                  <!-- block, p-4 md:p-5 -->
-<section uiCard padding="lg" class="mt-6">…</section> <!-- your classes are kept -->
-<ul uiCard divided>                                   <!-- list: no padding, divide-y, overflow hidden -->
+<ui-card>…</ui-card>
+<!-- block, p-4 md:p-5 -->
+<section uiCard padding="lg" class="mt-6">…</section>
+<!-- your classes are kept -->
+<ul uiCard divided>
+  <!-- list: no padding, divide-y, overflow hidden -->
   <li class="flex items-center gap-3 px-4 py-3">…</li>
 </ul>
-<a uiCard interactive routerLink="/informes">…</a>    <!-- hover/pressed feedback -->
+<a uiCard interactive routerLink="/informes">…</a>
+<!-- hover/pressed feedback -->
 ```
 
 Inputs: `padding` (`none | sm | md | lg`, default `md`), `variant` (`elevated` (default) | `grouped` | `tinted`), `divided`, `interactive`.
+
+- The card is `block` unless your static `class` sets a display utility (`flex`, `grid`, `inline-flex`, `hidden`, …); then your display wins, so `<section uiCard class="flex flex-col">` works as expected. Responsive display classes (`md:grid`) are layered on top of `block`.
+- `tinted` is `bg-muted` on light and `bg-fill-strong` on dark, so it stays visible when nested inside an elevated card (`--muted` equals the dark card colour).
 
 ## `ui-alert`: every load or save error
 
@@ -50,9 +57,13 @@ This replaces the inline `<p role="alert" class="rounded-lg bg-destructive/10 �
 
 ```html
 @if (failure(); as message) {
-  <ui-alert retryable [retrying]="loading()" (retry)="load()">{{ message }}</ui-alert>
+<ui-alert retryable [retrying]="loading()" (retry)="load()"
+  >{{ message }}</ui-alert
+>
 }
-<ui-alert tone="warning" title="Presupuesto casi agotado">Llevas el 85 %.</ui-alert>
+<ui-alert tone="warning" title="Presupuesto casi agotado"
+  >Llevas el 85 %.</ui-alert
+>
 ```
 
 - `tone`: `error` (default) | `warning` | `info` | `success`. Error and warning use `role="alert"`; info and success use `role="status"`.
@@ -65,9 +76,9 @@ No more "Cargando…" text or blank screens. Render the skeleton in the shape of
 
 ```html
 @if (loading()) {
-  <ui-card padding="none">
-    <ui-skeleton-list label="Cargando movimientos" [rows]="6" />
-  </ui-card>
+<ui-card padding="none">
+  <ui-skeleton-list label="Cargando movimientos" [rows]="6" />
+</ui-card>
 } @else { … }
 
 <!-- custom shapes -->
@@ -88,7 +99,9 @@ Shapes: `text` (default), `title`, `amount`, `circle`, `block`, `pill`; plus `li
 
 ```html
 <ui-glass-bar position="bottom">
-  <ui-button class="flex-1" [fullWidth]="true" (clicked)="confirm()">Confirmar</ui-button>
+  <ui-button class="flex-1" [fullWidth]="true" (clicked)="confirm()"
+    >Confirmar</ui-button
+  >
 </ui-glass-bar>
 ```
 
@@ -100,7 +113,9 @@ Raw utilities for custom navigation surfaces: `glass` (thick, for bars and anyth
 
 ```html
 <app-page-header title="Ajustes" backLink="/mas" backLabel="Más">
-  <ui-button pageHeaderActions size="sm" variant="secondary">Exportar</ui-button>
+  <ui-button pageHeaderActions size="sm" variant="secondary"
+    >Exportar</ui-button
+  >
 </app-page-header>
 ```
 
@@ -130,7 +145,10 @@ Stored category colours stay `#RRGGBB` (the backend validates that format). The 
 - Anything else: `categoryColorVar(stored)` returns `var(--category-green)` (or `null`). Bind it to `--category-color` and use the `category-icon` (tinted circle) or `category-swatch` (solid fill) utility:
 
 ```html
-<span class="category-swatch size-3 rounded-full" [style.--category-color]="colorVar(category.color)"></span>
+<span
+  class="category-swatch size-3 rounded-full"
+  [style.--category-color]="colorVar(category.color)"
+></span>
 ```
 
 - When saving, write `categoryColorValue(key)` (the editor sheet already does this).
@@ -139,6 +157,16 @@ Stored category colours stay `#RRGGBB` (the backend validates that format). The 
 ## Controls (updated wrappers)
 
 - `ui-button`: a capsule, 44px tall at `md`. `primary` is monochrome. Use `danger` only for destructive confirmations.
+- `a[uiButtonLink]`: the same capsule look on a real anchor, for navigation (`routerLink`) and downloads (`href` + `download`). Never copy `bg-primary rounded-capsule …` strings onto `<a>` elements.
+
+  ```html
+  <a uiButtonLink routerLink="/mas/fijos/nuevo">Nuevo fijo</a>
+  <a uiButtonLink variant="outline" [href]="csvUrl()" download>Descargar CSV</a>
+  <a uiButtonLink fullWidth [href]="archiveUrl()" download>Descargar ZIP</a>
+  ```
+
+  Inputs: `variant` (`primary` (default) | `secondary` | `outline` | `ghost`), `size` (`sm | md | lg`, heights are minimums so long labels wrap), `fullWidth`.
+
 - `ui-segmented` / `ui-tabs`: a capsule track with a sliding indicator; the active label is semibold, so colour is not the only cue. Pass `[onGlass]="true"` to `ui-segmented` inside sheets or bars.
 - `ui-sheet`: `side` defaults to `auto` (bottom sheet with 28px top corners on mobile, floating right panel at `md` and up). Pass `side` only to force a direction. The panel is glass with a spring animation.
 - `ui-switch`: a labelled switch with an optional `description`; two-way `[(checked)]`.

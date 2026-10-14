@@ -33,6 +33,8 @@ Status: approved 2026-10-14. Scope: frontend only (`frontend/`). Deliberate depa
 | Link | `#2964aa` | `#7ab7ff` |
 | Scrim | `#0d0d0d80` | `#0d0d0d80` |
 
+Dark `--muted` (`#303030`) is almost identical to the dark `--card` (`#2f2f2f`): never use `--muted` as a fill on top of `--card`; use fill strong (`#424242`) for chips, tracks and fills placed on cards.
+
 Gray primitives to remap (`--gray-1..12`): build a monotone ramp from the ChatGPT scale (50 `#f9f9f9`, 100 `#ececec`, 200 `#e3e3e3`, 300 `#cdcdcd`, 400 `#b4b4b4`, 500 `#9b9b9b`, 600 `#676767`, 700 `#424242`, 750 `#2f2f2f`, 800 `#212121`, 900 `#171717`, 950 `#0d0d0d`) for both `:root` and `.dark`. Remap yukit's coral `--primary-1..9` to the neutral ramp so nothing coral survives.
 
 ### Semantic colors (WCAG AA checked)
@@ -43,7 +45,7 @@ Gray primitives to remap (`--gray-1..12`): build a monotone ramp from the ChatGP
 | Expense (−) | text primary | text primary | Neutral; sign carries meaning |
 | Transfer (⇄) | `#5d5d5d` | `#b4b4b4` | Icon + neutral |
 | Danger / over budget text | `#ba2623` | `#ff8583` | Fill `#e02e2a` / `#ff6764` |
-| Warning / near budget (≥80 %) | `#b9480d` | `#ff9e6c` | |
+| Warning / near budget (≥80 %) | `#a63f0b` (icon / fill / border `#b9480d`) | `#ff9e6c` | Text darkened from `#b9480d` to stay AA on the orange tint and warning callout bg |
 | Success | `#007a3d` | `#40c977` | Never `#008635` on `#f9f9f9` (fails AA) |
 | Info | `#0169cc` | `#7ab7ff` | |
 | Badge tints | green `#04b84c26`, red `#fa423e29`, orange `#fb6a2229`, blue `#0285ff21` | same | Solid semantic color as text on top |
@@ -53,7 +55,7 @@ Gray primitives to remap (`--gray-1..12`): build a monotone ramp from the ChatGP
 
 - Light: `#3566f0`, `#027c6a`, `#9639ed`, `#d8241a`, `#9f5c14`, `#0d78a1`, `#cf42c5`, `#758e1a`.
 - Dark: `#81a6f9`, `#04bb9f`, `#c8a4fb`, `#ff8066`, `#ffcc38`, `#00b1ff`, `#dd6adc`, `#b6d80b`.
-- Grid `#0000000d` / `#ffffff1a`; axis labels `#8f8f8f` / `#afafaf`; track `#ececec` / `#303030`.
+- Grid `#0000000d` / `#ffffff1a`; axis labels `#8f8f8f` / `#afafaf`; track `#ececec` / `#424242` (`--viz-track` = fill strong; `#303030` is invisible on the `#2f2f2f` dark card).
 - Category colors (`category-appearance.ts`): replace the 12 hex literals with 12 palette keys that resolve to CSS variables with light and dark values (extend the series above to 12). Existing stored values must map to the nearest key (frontend mapping, no data migration).
 
 ## 3. Glass system
