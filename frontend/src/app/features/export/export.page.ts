@@ -26,7 +26,12 @@ const DELIMITER_OPTIONS = [
         aria-labelledby="export-full-title"
       >
         <div class="flex items-start gap-3">
-          <ng-icon name="lucideFileArchive" size="24" class="text-primary" aria-hidden="true" />
+          <ng-icon
+            name="lucideFileArchive"
+            size="24"
+            class="text-primary-text"
+            aria-hidden="true"
+          />
           <div>
             <h2 id="export-full-title" class="font-semibold text-foreground">
               Exportación completa
@@ -56,7 +61,12 @@ const DELIMITER_OPTIONS = [
         aria-labelledby="export-csv-title"
       >
         <div class="flex items-start gap-3">
-          <ng-icon name="lucideFileSpreadsheet" size="24" class="text-primary" aria-hidden="true" />
+          <ng-icon
+            name="lucideFileSpreadsheet"
+            size="24"
+            class="text-primary-text"
+            aria-hidden="true"
+          />
           <div>
             <h2 id="export-csv-title" class="font-semibold text-foreground">
               Todos los movimientos en CSV

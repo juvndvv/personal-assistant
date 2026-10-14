@@ -42,6 +42,7 @@ function percentileMs(array $sortedMicroseconds, int $percentile): int
 }
 
 it('serves every report endpoint within the p95 budget on 50k movements', function (int $monthStartDay): void {
+    config(['finance.security.api_rate_limit_per_minute' => 100_000]);
     $this->travelTo(CarbonImmutable::parse('2026-10-13 10:00', 'Europe/Madrid'));
     $this->actingAs(User::factory()->create());
     $this->seed(PerformanceSeeder::class);

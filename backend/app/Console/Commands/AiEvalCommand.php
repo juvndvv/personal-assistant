@@ -105,10 +105,11 @@ final class AiEvalCommand extends Command
 
         sort($latencies);
         $this->info(sprintf(
-            'Latency over %d samples: p50 %d ms, p90 %d ms, max %d ms.',
+            'Latency over %d samples: p50 %d ms, p90 %d ms, p95 %d ms, max %d ms.',
             count($latencies),
             self::percentile($latencies, 50),
             self::percentile($latencies, 90),
+            self::percentile($latencies, 95),
             $latencies[count($latencies) - 1],
         ));
 

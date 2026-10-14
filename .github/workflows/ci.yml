@@ -15,6 +15,7 @@ env:
   NODE_VERSION: 24.21.0
   PHP_VERSION: "8.5"
   RUNTIME_IMAGE: personal-finance:ci
+  BACKUP_IMAGE: personal-finance-backup:ci
 
 jobs:
   pins:
@@ -88,7 +89,7 @@ jobs:
       - run: npm run lint
       - run: npx prettier --check .
       - run: npm test
-      - run: npx ng build
+      - run: npm run build
       - name: Service worker caches no API URL
         run: |
           jq -e '(.dataGroups // []) | length == 0' dist/frontend/browser/ngsw.json
@@ -97,29 +98,8 @@ jobs:
         run: jq -e '.name and .short_name and .start_url and .display and (.icons | length > 0)' dist/frontend/browser/manifest.webmanifest
 
   image:
-    name: Runtime image
+    name: Runtime and backup images
     runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: docker/setup-buildx-action@v4.4.1
-      - uses: docker/build-push-action@v7.4.0
-        with:
-          context: .
-          target: runtime
-          push: false
-          tags: ${{ env.RUNTIME_IMAGE }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  e2e:
-    name: End-to-end (Playwright)
-    runs-on: ubuntu-24.04
-    needs: image
-    env:
-      COMPOSE_FILE: compose.yaml:compose.prod.yaml
-      E2E_BASE_URL: https://localhost
-      E2E_USER_EMAIL: e2e@example.com
-      E2E_USER_PASSWORD: e2e-password-123
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: docker/setup-buildx-action@v4.4.1
@@ -131,21 +111,109 @@ jobs:
           push: false
           tags: ${{ env.RUNTIME_IMAGE }}
           cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: docker/build-push-action@v7.4.0
+        with:
+          context: docker/backup
+          load: true
+          push: false
+          tags: ${{ env.BACKUP_IMAGE }}
+          cache-from: type=gha,scope=backup
+          cache-to: type=gha,scope=backup,mode=max
+      - name: No secrets in image layers, history or env
+        run: scripts/check-image-secrets.sh "$RUNTIME_IMAGE" "$BACKUP_IMAGE"
+
+  e2e:
+    name: End-to-end (Playwright)
+    runs-on: ubuntu-24.04
+    needs: image
+    env:
+      COMPOSE_FILE: compose.yaml:compose.prod.yaml
+      E2E_BASE_URL: https://localhost
+      E2E_USER_EMAIL: e2e@example.com
+      E2E_USER_PASSWORD: e2e-password-123
+      E2E_EXPECT_SECURITY_HEADERS: "1"
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: docker/setup-buildx-action@v4.4.1
+      - uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          target: runtime
+          load: true
+          push: false
+          tags: ${{ env.RUNTIME_IMAGE }}
+          cache-from: type=gha
+      - uses: docker/build-push-action@v7.4.0
+        with:
+          context: docker/backup
+          load: true
+          push: false
+          tags: ${{ env.BACKUP_IMAGE }}
+          cache-from: type=gha,scope=backup
       - name: Write the compose environment
         run: |
+          identity="$(docker run --rm --entrypoint age-keygen "$BACKUP_IMAGE" 2>/dev/null)"
+          (umask 077; printf '%s\n' "$identity" > "${RUNNER_TEMP}/backup-identity.txt")
           {
             echo "APP_IMAGE=${RUNTIME_IMAGE}"
+            echo "BACKUP_IMAGE=${BACKUP_IMAGE}"
+            echo "BACKUP_AGE_RECIPIENT=$(docker run --rm -i --entrypoint age-keygen "$BACKUP_IMAGE" -y <<< "$identity")"
+            echo "BACKUP_REMOTE=/backups/offsite"
             echo "APP_KEY=base64:$(openssl rand -base64 32)"
             echo "APP_URL=${E2E_BASE_URL}"
             echo "SERVER_NAME=localhost"
             echo "DB_PASSWORD=$(openssl rand -hex 16)"
             echo "SANCTUM_STATEFUL_DOMAINS=localhost"
+            echo "API_RATE_LIMIT_PER_MINUTE=100000"
           } > .env
       - run: docker compose config --quiet
       - run: scripts/check-compose-env.sh
       - run: docker compose up -d --wait --wait-timeout 180
       - name: Runtime smoke (health, php.ini limits, receipts volume, schedule:list)
         run: scripts/smoke.sh
+      - name: HTTPS redirect, HSTS and security headers
+        run: |
+          headers="$(curl -skI "${E2E_BASE_URL}/login")"
+          printf '%s\n' "$headers"
+          for header in 'strict-transport-security: max-age=31536000; includeSubDomains' \
+            "content-security-policy: default-src 'self'" \
+            'x-content-type-options: nosniff' \
+            'referrer-policy: same-origin' \
+            'permissions-policy: camera=(self), microphone=(self)' \
+            'x-frame-options: DENY'; do
+            grep -qiF "$header" <<< "$headers" || { echo "::error::missing header: ${header}"; exit 1; }
+          done
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/login)" = 308
+      - name: The database publishes no port
+        run: test -z "$(docker compose port db 5432 2>/dev/null)"
+      - name: Backup produces encrypted archives, prunes expired copies and stays healthy
+        run: |
+          expired='pf-19990101T000000-db.dump.age'
+          docker compose exec -T backup sh -c "
+            set -eu
+            mkdir -p /backups/offsite
+            stale=\"\$(date -d @\$(( \$(date +%s) - 31 * 86400 )) '+%Y-%m-%d %H:%M:%S')\"
+            for file in /backups/${expired} /backups/offsite/${expired}; do
+              echo expired > \"\$file\"
+              touch -d \"\$stale\" \"\$file\"
+            done
+          "
+          docker compose exec -T backup backup-run
+          docker compose exec -T backup sh -c 'ls /backups/offsite/*-db.dump.age /backups/offsite/*-storage.tar.gz.age /backups/offsite/*-manifest.txt.age'
+          for file in "/backups/${expired}" "/backups/offsite/${expired}"; do
+            if docker compose exec -T backup test -e "$file"; then echo "::error::expired backup not pruned: ${file}"; exit 1; fi
+          done
+          dump="$(docker compose exec -T backup sh -c 'ls -t /backups/offsite/*-db.dump.age | head -n 1' | tr -d '\r')"
+          docker compose exec -T backup head -c 21 "$dump" | grep -q '^age-encryption.org/v1'
+          if docker compose exec -T backup pg_restore -l "$dump" >/dev/null 2>&1; then echo "::error::the dump is readable without the private key"; exit 1; fi
+          if docker compose exec -T backup age -d "$dump" >/dev/null 2>&1; then echo "::error::the dump decrypts without an identity"; exit 1; fi
+          docker compose exec -T backup sh -c 'cat > /tmp/identity.txt && trap "rm -f /tmp/identity.txt" EXIT && age -d -i /tmp/identity.txt "$1" | pg_restore -l >/dev/null' sh "$dump" < "${RUNNER_TEMP}/backup-identity.txt"
+          docker compose exec -T backup backup-healthcheck
+          docker compose exec -T backup sh -c 'echo $(( $(date +%s) - (BACKUP_STALE_AFTER_HOURS + 1) * 3600 )) > /backups/.last-success'
+          if docker compose exec -T backup backup-healthcheck; then echo "::error::the healthcheck stays healthy with a stale heartbeat"; exit 1; fi
+          docker compose exec -T backup backup-run
+          docker compose exec -T backup backup-healthcheck
       - name: Create the e2e user
         run: printf '%s' "${E2E_USER_PASSWORD}" | docker compose exec -T web php artisan app:create-user "${E2E_USER_EMAIL}" --name=E2E --password-stdin
       - name: Seed the dev ledger

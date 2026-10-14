@@ -93,7 +93,7 @@ export const TOP_CATEGORIES = 5;
               <a
                 routerLink="/informes"
                 [queryParams]="{ period: data.period.label }"
-                class="text-sm text-primary hover:underline"
+                class="text-sm text-primary-text hover:underline"
                 >Ver informe</a
               >
             </div>
@@ -140,7 +140,7 @@ export const TOP_CATEGORIES = 5;
         >
           <div class="flex items-baseline justify-between gap-2">
             <h2 id="net-worth-heading" class="text-sm text-muted-foreground">Patrimonio neto</h2>
-            <a routerLink="/informes/patrimonio" class="text-sm text-primary hover:underline">
+            <a routerLink="/informes/patrimonio" class="text-sm text-primary-text hover:underline">
               Detalle
             </a>
           </div>
@@ -154,7 +154,7 @@ export const TOP_CATEGORIES = 5;
           @if (archivedWithBalanceCount() > 0) {
             <a
               routerLink="/informes/patrimonio"
-              class="mt-1 inline-block text-xs text-muted-foreground hover:text-primary hover:underline"
+              class="mt-1 inline-block text-xs text-muted-foreground hover:text-primary-text hover:underline"
               data-testid="archived-included"
             >
               {{ archivedIncludedLabel() }}
@@ -173,7 +173,7 @@ export const TOP_CATEGORIES = 5;
               <li>
                 <a
                   [routerLink]="['/cuentas', account.id]"
-                  class="flex items-center justify-between gap-3 py-2 text-sm hover:text-primary"
+                  class="flex items-center justify-between gap-3 py-2 text-sm hover:text-primary-text"
                 >
                   <span class="min-w-0">
                     <span class="flex items-center gap-2">
@@ -195,7 +195,10 @@ export const TOP_CATEGORIES = 5;
               </li>
             }
           </ul>
-          <a routerLink="/cuentas" class="mt-3 inline-block text-sm text-primary hover:underline">
+          <a
+            routerLink="/cuentas"
+            class="mt-3 inline-block text-sm text-primary-text hover:underline"
+          >
             Ver cuentas ({{ activeAccounts().length }})
           </a>
         </section>
@@ -234,7 +237,7 @@ export const TOP_CATEGORIES = 5;
                       period: summary()?.period?.label,
                       category: category.category_id,
                     }"
-                    class="flex flex-col gap-1.5 hover:text-primary"
+                    class="flex flex-col gap-1.5 hover:text-primary-text"
                     data-testid="top-category"
                   >
                     <span class="flex items-baseline justify-between gap-3 text-sm">
@@ -263,7 +266,9 @@ export const TOP_CATEGORIES = 5;
             <h2 id="recent-heading" class="text-lg font-semibold text-foreground">
               Actividad reciente
             </h2>
-            <a routerLink="/movimientos" class="text-sm text-primary hover:underline">Ver todos</a>
+            <a routerLink="/movimientos" class="text-sm text-primary-text hover:underline"
+              >Ver todos</a
+            >
           </div>
           @if (recent().length === 0) {
             <p class="text-sm text-muted-foreground">Aún no has registrado movimientos.</p>

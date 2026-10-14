@@ -38,7 +38,7 @@ const HAS_MOVEMENTS_MESSAGE =
     UiDialogFooter,
   ],
   template: `
-    <a routerLink="/cuentas" class="mb-4 inline-block text-sm text-primary hover:underline">
+    <a routerLink="/cuentas" class="mb-4 inline-block text-sm text-primary-text hover:underline">
       ← Cuentas
     </a>
 

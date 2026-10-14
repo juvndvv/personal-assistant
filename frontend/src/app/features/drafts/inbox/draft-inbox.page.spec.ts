@@ -59,7 +59,10 @@ describe('Pending drafts', () => {
         provideRouter([{ path: 'otra', component: BlankPage }]),
         { provide: DraftsApi, useValue: api },
         { provide: AuthStore, useValue: { user: signal(null), logout: vi.fn() } },
-        { provide: AppUpdates, useValue: { updateReady: signal(false), reload: vi.fn() } },
+        {
+          provide: AppUpdates,
+          useValue: { updateReady: signal(false), reloadRequired: signal(false), reload: vi.fn() },
+        },
       ],
     });
 

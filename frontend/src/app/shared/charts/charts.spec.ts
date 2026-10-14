@@ -184,7 +184,7 @@ describe('StatTile and ProgressBar', () => {
     });
 
     expect(screen.getByTestId('stat-value')).toHaveTextContent('25 %');
-    expect(screen.getByTestId('stat-value')).toHaveClass('text-success');
+    expect(screen.getByTestId('stat-value')).toHaveClass('text-success-text');
     expect(screen.getByTestId('stat-status')).toHaveTextContent('Objetivo cumplido');
   });
 

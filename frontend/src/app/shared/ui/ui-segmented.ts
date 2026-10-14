@@ -26,7 +26,7 @@ export interface UiSegmentOption {
           role="radio"
           [attr.aria-checked]="option.value === value()"
           [tabIndex]="option.value === value() ? 0 : -1"
-          class="min-h-10 flex-1 rounded-lg px-3 text-sm font-medium transition-colors"
+          class="min-h-11 flex-1 rounded-lg px-3 text-sm font-medium transition-colors"
           [class]="
             option.value === value()
               ? 'bg-background text-foreground shadow-xs'

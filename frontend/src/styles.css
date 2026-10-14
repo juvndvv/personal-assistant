@@ -6,6 +6,18 @@
 
 @source "../node_modules/yukit-web";
 
+@theme inline {
+  --color-primary-text: var(--primary-text);
+  --color-success-text: var(--success-text);
+  --color-info-text: var(--info-text);
+}
+
+:root {
+  --primary-fill-cta: var(--primary-6);
+  --primary-fill-hover: var(--primary-7);
+  --primary-fill-pressed: var(--primary-8);
+}
+
 html,
 body {
   height: 100%;
@@ -14,6 +26,48 @@ body {
 body {
   margin: 0;
   -webkit-tap-highlight-color: transparent;
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  @media (pointer: coarse) {
+    :where(
+      button:not([role='checkbox'], [role='switch']),
+      select,
+      summary,
+      a[href],
+      input:not([type='checkbox'], [type='radio'], [type='hidden'], [type='file']),
+      [role='button'],
+      [role='tab'],
+      [role='radio'],
+      [role='option'],
+      [role='menuitem'],
+      [role='combobox']
+    ) {
+      min-height: 44px;
+    }
+
+    :where(
+      button:not([role='checkbox'], [role='switch']),
+      [role='button'],
+      [role='tab'],
+      [role='menuitem']
+    ) {
+      min-width: 44px;
+    }
+
+    :where(
+      label:has(input:is([type='checkbox'], [type='radio']), [role='checkbox'], [role='switch'])
+    ) {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+    }
+  }
 }
 
 .tabular-amount {

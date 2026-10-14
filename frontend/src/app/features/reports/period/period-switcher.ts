@@ -32,7 +32,7 @@ import { formatPeriodLabel } from '../../../core/date/period-label';
       @if (!isCurrent() && label() !== null) {
         <button
           type="button"
-          class="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-primary hover:underline"
+          class="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-primary-text hover:underline"
           (click)="current.emit()"
         >
           Ir al actual

@@ -21,7 +21,11 @@ export const TAG_NAME_TAKEN_MESSAGE = 'Ya existe una etiqueta con ese nombre.';
   selector: 'app-tags-page',
   imports: [PageHeader, RouterLink, UiButton, UiDialog, UiDialogFooter, UiEmptyState, UiInput],
   template: `
-    <a routerLink="/mas" class="mb-4 inline-block text-sm text-primary hover:underline">← Más</a>
+    <a
+      routerLink="/mas"
+      class="mb-4 inline-flex min-w-11 items-center text-sm text-primary-text hover:underline"
+      >← Más</a
+    >
     <app-page-header
       title="Etiquetas"
       subtitle="Las etiquetas agrupan movimientos de distintas categorías, por ejemplo un viaje."

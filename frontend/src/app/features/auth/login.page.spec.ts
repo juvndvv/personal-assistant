@@ -108,6 +108,65 @@ describe('LoginPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('rounds long throttling delays up to minutes on 429', async () => {
+    const { login, user } = await setup();
+    login.mockRejectedValue(
+      new HttpErrorResponse({
+        status: 429,
+        headers: new HttpHeaders({ 'Retry-After': '150' }),
+        error: { message: 'Too Many Attempts.' },
+      }),
+    );
+
+    await fillAndSubmit(user);
+
+    expect(
+      await screen.findByText('Demasiados intentos. Vuelve a intentarlo en 3 minutos.'),
+    ).toBeInTheDocument();
+  });
+
+  it('explains the lockout on 403 ip_blocked with the remaining time', async () => {
+    const { login, navigateByUrl, user } = await setup();
+    login.mockRejectedValue(
+      new HttpErrorResponse({
+        status: 403,
+        headers: new HttpHeaders({ 'Retry-After': '3540' }),
+        error: { message: 'Too many failed logins.', code: 'ip_blocked' },
+      }),
+    );
+
+    await fillAndSubmit(user);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Hemos bloqueado el acceso desde esta red por demasiados intentos fallidos. Vuelve a intentarlo en 59 minutos.',
+    );
+    expect(navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('falls back to one hour on 403 ip_blocked without Retry-After', async () => {
+    const { login, user } = await setup();
+    login.mockRejectedValue(
+      new HttpErrorResponse({ status: 403, error: { message: 'Blocked', code: 'ip_blocked' } }),
+    );
+
+    await fillAndSubmit(user);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Hemos bloqueado el acceso desde esta red por demasiados intentos fallidos. Vuelve a intentarlo dentro de una hora.',
+    );
+  });
+
+  it('does not treat other 403 responses as a lockout', async () => {
+    const { login, user } = await setup();
+    login.mockRejectedValue(new HttpErrorResponse({ status: 403, error: { message: 'Nope' } }));
+
+    await fillAndSubmit(user);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No tienes permiso para acceder. Si el problema continúa, revisa la configuración del servidor.',
+    );
+  });
+
   it('shows a connection message on other failures', async () => {
     const { login, user } = await setup();
     login.mockRejectedValue(new HttpErrorResponse({ status: 0 }));

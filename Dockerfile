@@ -3,7 +3,7 @@ WORKDIR /src
 COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
 RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
-RUN npx ng build
+RUN npm run build
 
 
 FROM composer:2.10.3 AS vendor

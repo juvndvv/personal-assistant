@@ -47,7 +47,7 @@ interface AdjustmentErrors {
           <p class="text-sm text-muted-foreground">Ajuste registrado</p>
           <p
             class="text-2xl font-semibold tabular-nums"
-            [class]="adjustment.signed_amount_cents < 0 ? 'text-destructive' : 'text-success'"
+            [class]="adjustment.signed_amount_cents < 0 ? 'text-destructive' : 'text-success-text'"
             data-testid="adjustment-delta"
           >
             {{ adjustment.signed_amount_cents | eur: { signed: true } }}

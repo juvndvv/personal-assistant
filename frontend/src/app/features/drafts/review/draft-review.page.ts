@@ -112,7 +112,7 @@ function prefillFrom(draft: Draft): Prefill {
       <p role="alert" class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
         {{ message }}
       </p>
-      <a routerLink="/pendientes" class="mt-4 inline-block text-sm font-medium text-primary">
+      <a routerLink="/pendientes" class="mt-4 inline-block text-sm font-medium text-primary-text">
         Volver a pendientes
       </a>
     } @else if (draft(); as current) {
@@ -120,7 +120,7 @@ function prefillFrom(draft: Draft): Prefill {
         <p role="status" class="rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
           {{ notPendingMessage }}
         </p>
-        <a routerLink="/pendientes" class="mt-4 inline-block text-sm font-medium text-primary">
+        <a routerLink="/pendientes" class="mt-4 inline-block text-sm font-medium text-primary-text">
           Volver a pendientes
         </a>
       } @else {

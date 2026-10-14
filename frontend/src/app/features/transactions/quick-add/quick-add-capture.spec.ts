@@ -97,7 +97,10 @@ async function setup() {
     providers: [
       provideRouter([]),
       { provide: AuthStore, useValue: { user: signal(null), logout: vi.fn() } },
-      { provide: AppUpdates, useValue: { updateReady: signal(false), reload: vi.fn() } },
+      {
+        provide: AppUpdates,
+        useValue: { updateReady: signal(false), reloadRequired: signal(false), reload: vi.fn() },
+      },
       { provide: QuickAddApi, useValue: { defaults: vi.fn(() => of(DEFAULTS)) } },
       { provide: AccountsApi, useValue: { list: vi.fn(() => of([anAccount({ id: 3 })])) } },
       { provide: CategoriesApi, useValue: { list: vi.fn(() => of([TRANSPORT])) } },

@@ -20,19 +20,24 @@ use App\Http\Controllers\Api\V1\SuggestionsController;
 use App\Http\Controllers\Api\V1\TagsController;
 use App\Http\Controllers\Api\V1\TransactionsController;
 use App\Http\Controllers\Api\V1\TransfersController;
+use App\Http\Middleware\BlockAfterFailedLogins;
 use Illuminate\Support\Facades\Route;
 
-Route::post('auth/login', [AuthController::class, 'login'])
-    ->middleware('throttle:login')
-    ->name('auth.login');
+Route::middleware(BlockAfterFailedLogins::class)->group(function (): void {
+    Route::post('auth/login', [AuthController::class, 'login'])
+        ->middleware('throttle:login')
+        ->name('auth.login');
+
+    Route::middleware('auth:sanctum')->group(function (): void {
+        Route::post('auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
+        Route::get('auth/me', [AuthController::class, 'me'])->name('auth.me');
+        Route::put('auth/password', [AuthController::class, 'updatePassword'])
+            ->middleware('throttle:password')
+            ->name('auth.password');
+    });
+});
 
 Route::middleware('auth:sanctum')->group(function (): void {
-    Route::post('auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
-    Route::get('auth/me', [AuthController::class, 'me'])->name('auth.me');
-    Route::put('auth/password', [AuthController::class, 'updatePassword'])
-        ->middleware('throttle:password')
-        ->name('auth.password');
-
     Route::get('settings', [SettingsController::class, 'show'])->name('settings.show');
     Route::patch('settings', [SettingsController::class, 'update'])->name('settings.update');
 

@@ -41,7 +41,7 @@ const MAX_DONUT_SEGMENTS = 6;
             [routerLink]="[]"
             [queryParams]="{ category: null }"
             queryParamsHandling="merge"
-            class="text-primary hover:underline"
+            class="text-primary-text hover:underline"
             >Todas las categorías</a
           >
           <span class="text-muted-foreground" aria-hidden="true"> / </span>
@@ -61,7 +61,7 @@ const MAX_DONUT_SEGMENTS = 6;
               <a
                 [routerLink]="['/movimientos']"
                 [queryParams]="movementsParams(child.category_id)"
-                class="flex flex-col gap-1.5 py-2.5 hover:text-primary"
+                class="flex flex-col gap-1.5 py-2.5 hover:text-primary-text"
                 data-testid="breakdown-row"
               >
                 <span class="flex items-baseline justify-between gap-3 text-sm">
@@ -93,7 +93,7 @@ const MAX_DONUT_SEGMENTS = 6;
         <a
           [routerLink]="['/movimientos']"
           [queryParams]="movementsParams(current.category_id)"
-          class="mt-3 inline-block text-sm text-primary hover:underline"
+          class="mt-3 inline-block text-sm text-primary-text hover:underline"
         >
           Ver los movimientos de {{ current.name }}
         </a>
@@ -119,7 +119,7 @@ const MAX_DONUT_SEGMENTS = 6;
                     : movementsParams(node.category_id)
                 "
                 [queryParamsHandling]="node.children.length > 0 ? 'merge' : ''"
-                class="flex flex-col gap-1.5 py-2.5 hover:text-primary"
+                class="flex flex-col gap-1.5 py-2.5 hover:text-primary-text"
                 data-testid="breakdown-row"
               >
                 <span class="flex items-baseline justify-between gap-3 text-sm">

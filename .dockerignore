@@ -8,6 +8,8 @@
 .env
 .env.*
 !.env.example
+**/*.agekey
+**/rclone.conf
 docs
 compose*.yaml
 Makefile
@@ -22,7 +24,8 @@ backend/public/storage
 backend/bootstrap/cache/*.php
 backend/storage/app/private/*
 backend/storage/app/public/*
-backend/storage/framework/cache/data/*
+backend/storage/*.key
+backend/storage/framework/cache/*
 backend/storage/framework/sessions/*
 backend/storage/framework/testing
 backend/storage/framework/views/*

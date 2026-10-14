@@ -12,7 +12,7 @@ import { describeLoginFailure } from './login-error';
   template: `
     <main class="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6 py-12">
       <header class="mb-8 text-center">
-        <p class="text-sm font-semibold tracking-wide text-primary">Finanzas</p>
+        <p class="text-sm font-semibold tracking-wide text-primary-text">Finanzas</p>
         <h1 class="mt-2 text-2xl font-semibold text-foreground">Inicia sesión</h1>
         <p class="mt-1 text-sm text-muted-foreground">
           Accede para registrar y revisar tus movimientos.

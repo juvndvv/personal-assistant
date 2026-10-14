@@ -80,11 +80,11 @@ pest_status=0
 (cd "$backend" && PAO_DISABLE=1 php -d memory_limit="$php_memory_limit" artisan test --group=perf --colors=never) 2>&1 | tee "${work}/pest.txt" || pest_status=${PIPESTATUS[0]}
 pest_summary="$(grep -E '^[[:space:]]*Tests:' "${work}/pest.txt" | tail -n 1 | sed -E 's/^[[:space:]]+//; s/[[:space:]]+/ /g' || true)"
 
-results_table="$(grep -E '^month_start_day=[0-9]+ \{' "${work}/pest.txt" | php -r '
+results_table="$(grep -E '^(month_start_day=[0-9]+|scope=[a-z-]+) \{' "${work}/pest.txt" | php -r '
   $rows = [];
   while (($line = fgets(STDIN)) !== false) {
-      [$period, $json] = explode(" ", trim($line), 2);
-      $day = substr($period, strlen("month_start_day="));
+      [$label, $json] = explode(" ", trim($line), 2);
+      $day = str_starts_with($label, "month_start_day=") ? substr($label, strlen("month_start_day=")) : "-";
       foreach (json_decode($json, true, flags: JSON_THROW_ON_ERROR) as $endpoint => $timing) {
           $rows[] = sprintf("| %s | %s | %d | %d | %s |", $endpoint, $day, $timing["p50"], $timing["p95"], $timing["p95"] < 300 ? "pass" : "FAIL");
       }

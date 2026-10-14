@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
+import { isIpBlocked } from '../api/api-error';
 import { AuthApi } from '../api/auth.api';
 import { LoginCredentials, User } from '../api/models';
 import { LOGIN_PATH } from './login-url';
@@ -59,7 +60,7 @@ export class AuthStore {
       this.startSession(await firstValueFrom(this.api.me()));
       return 'authenticated';
     } catch (error: unknown) {
-      if (error instanceof HttpErrorResponse && error.status === UNAUTHENTICATED) {
+      if (isUnauthenticated(error) || isIpBlocked(error)) {
         this.clearSession();
         return 'guest';
       }
@@ -72,4 +73,8 @@ export class AuthStore {
     this.currentUser.set(user);
     this.sessionStatus.set('authenticated');
   }
+}
+
+function isUnauthenticated(error: unknown): boolean {
+  return error instanceof HttpErrorResponse && error.status === UNAUTHENTICATED;
 }

@@ -67,7 +67,7 @@ const PERIOD_HISTORY = 24;
         class="mb-4 flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm font-medium text-foreground hover:bg-primary/10"
         data-testid="pending-drafts-banner"
       >
-        <ng-icon name="lucideInbox" size="20" class="text-primary" aria-hidden="true" />
+        <ng-icon name="lucideInbox" size="20" class="text-primary-text" aria-hidden="true" />
         <span class="flex-1">
           {{
             pendingCount() === 1
@@ -114,7 +114,7 @@ const PERIOD_HISTORY = 24;
       <p class="col-span-2 text-sm text-muted-foreground" data-testid="list-scope">{{ scope() }}</p>
       <div>
         <p class="text-xs text-muted-foreground">Ingresos</p>
-        <p class="font-semibold tabular-nums text-success" data-testid="total-income">
+        <p class="font-semibold tabular-nums text-success-text" data-testid="total-income">
           {{ totals().income_cents | eur }}
         </p>
       </div>

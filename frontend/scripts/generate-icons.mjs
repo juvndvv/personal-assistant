@@ -1,6 +1,7 @@
 import { chromium } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { splashBackground, splashFile, splashScreens } from './splash-screens.mjs';
 
 const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
 const standardSizes = [72, 96, 128, 144, 152, 192, 384, 512];
@@ -37,5 +38,21 @@ await render(
   `icons/icon-maskable-${maskableSize}x${maskableSize}.png`,
 );
 await render(standardPage(180), 180, 'icons/apple-touch-icon.png');
+
+function splashPage({ width, height }) {
+  const markSize = Math.round(Math.min(width, height) * 0.3);
+  return `<body style="margin:0;width:${width}px;height:${height}px;display:grid;place-items:center;background:${splashBackground}">${mark.replace('<svg ', `<svg width="${markSize}" height="${markSize}" `)}</body>`;
+}
+
+for (const screen of splashScreens) {
+  const context = await browser.newContext({
+    viewport: { width: screen.width, height: screen.height },
+    deviceScaleFactor: screen.ratio,
+  });
+  const splash = await context.newPage();
+  await splash.setContent(splashPage(screen));
+  await splash.screenshot({ path: `${publicDir}${splashFile(screen)}` });
+  await context.close();
+}
 
 await browser.close();

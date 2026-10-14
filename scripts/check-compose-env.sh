@@ -19,6 +19,8 @@ required_variables=(
   OPENAI_COMPATIBLE_API_KEY
   OPENAI_COMPATIBLE_TEXT_MODEL
   OPENAI_COMPATIBLE_TRANSCRIPTION_MODEL
+  API_RATE_LIMIT_PER_MINUTE
+  LOGIN_LOCKOUT_CACHE_STORE
 )
 
 rendered="$(docker compose "$@" config --format json)"
@@ -38,4 +40,4 @@ if [[ "$failures" -gt 0 ]]; then
   exit 1
 fi
 
-printf 'compose-env: ok   %d AI variables reach %s\n' "${#required_variables[@]}" "${app_services[*]}"
+printf 'compose-env: ok   %d AI and security variables reach %s\n' "${#required_variables[@]}" "${app_services[*]}"

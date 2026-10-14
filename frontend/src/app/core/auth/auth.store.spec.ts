@@ -53,6 +53,16 @@ describe('AuthStore', () => {
     await expect(store.loadMe()).resolves.toBe('guest');
   });
 
+  it('treats a blocked IP as a guest so the login page can explain the lockout', async () => {
+    const loading = store.loadMe();
+    backend
+      .expectOne('/api/v1/auth/me')
+      .flush({ message: 'Blocked.', code: 'ip_blocked' }, { status: 403, statusText: 'Forbidden' });
+
+    await expect(loading).resolves.toBe('guest');
+    expect(store.user()).toBeNull();
+  });
+
   it('marks the session as unavailable on server errors and retries on the next load', async () => {
     const loading = store.loadMe();
     backend.expectOne('/api/v1/auth/me').flush(null, { status: 503, statusText: 'Unavailable' });

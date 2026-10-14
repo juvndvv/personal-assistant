@@ -143,6 +143,7 @@ it('requires authentication to read or delete receipts', function (): void {
     $this->app['auth']->guard('web')->logout();
 
     $this->get("/api/v1/attachments/{$attachment->id}")->assertUnauthorized();
+    $this->get("/api/v1/attachments/{$attachment->id}?download=1")->assertUnauthorized();
     $this->deleteJson("/api/v1/attachments/{$attachment->id}")->assertUnauthorized();
     $this->getJson("/api/v1/transactions/{$this->expense->id}/attachments")->assertUnauthorized();
     $this->post("/api/v1/transactions/{$this->expense->id}/attachments", ['file' => Captures::photo()])->assertUnauthorized();

@@ -36,7 +36,11 @@ import { budgetVsActualSource } from './budget-vs-actual-source';
   ],
   providers: [PeriodNavigator, provideIcons({ lucideHistory, lucidePencil })],
   template: `
-    <a routerLink="/mas" class="mb-4 inline-block text-sm text-primary hover:underline">← Más</a>
+    <a
+      routerLink="/mas"
+      class="mb-4 inline-flex min-w-11 items-center text-sm text-primary-text hover:underline"
+      >← Más</a
+    >
     <app-page-header
       title="Presupuestos"
       subtitle="Límite mensual por categoría de gasto. Se repite cada periodo hasta que lo cambies."
@@ -61,7 +65,7 @@ import { budgetVsActualSource } from './budget-vs-actual-source';
       @if (list.length === 0) {
         <p class="mt-6 text-sm text-muted-foreground">
           No tienes categorías de gasto.
-          <a routerLink="/mas/categorias" class="text-primary hover:underline">Crea una</a>
+          <a routerLink="/mas/categorias" class="text-primary-text hover:underline">Crea una</a>
           para fijar su presupuesto.
         </p>
       } @else {

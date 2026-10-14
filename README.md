@@ -9,12 +9,12 @@ origin by FrankenPHP (Caddy), with PostgreSQL 18. Product and technical requirem
 |---|---|
 | `backend/` | Laravel API (`/api/v1`), Pest, PHPStan, Pint. See `backend/README.md`. |
 | `frontend/` | Angular PWA, Vitest, ESLint, Prettier, Playwright. See `frontend/README.md`. |
-| `docker/` | FrankenPHP `Caddyfile` (prod) and `Caddyfile.dev`, `php.ini`, db init scripts. |
+| `docker/` | FrankenPHP `Caddyfile` (prod, security headers) and `Caddyfile.dev`, `php.ini`, db init scripts, `backup/` image. |
 | `compose.yaml` | Base stack: `web`, `worker`, `scheduler`, `db`. |
 | `compose.override.yaml` | Local development (applied automatically). |
-| `compose.prod.yaml` | Production: prebuilt image, one-shot `migrate`, restart policies. |
-| `scripts/` | `check-pins.sh` and operational scripts. |
-| `docs/ops/` | Operations guides (local HTTPS, maintenance). |
+| `compose.prod.yaml` | Production: prebuilt images, one-shot `migrate`, encrypted off-site `backup`, restart policies. |
+| `scripts/` | `check-pins.sh`, `deploy.sh`, `restore.sh`, `restore-drill.sh`, `check-image-secrets.sh`, smoke and perf. |
+| `docs/ops/` | Operations: `deploy.md`, `backup-restore.md`, `security.md`, `maintenance.md`, `local-https.md`, `ai-providers.md`. |
 
 ## Requirements
 
@@ -50,7 +50,10 @@ To use the app from a phone over the LAN or Tailscale, trust Caddy's local CA as
 | `make logs` / `make ps` | Follow logs / list services |
 | `make lint` | `check-pins.sh`, Pint, PHPStan (level 9), ESLint, Prettier |
 | `make test` | Pest on PostgreSQL `finance_test` (needs `db` running) and Vitest |
-| `make build` | Production `ng build` and `docker build --target runtime` |
+| `make build` | Production `ng build`, runtime image and backup image |
+| `make image-secrets` | Assert the built images contain no secrets |
+| `make restore-drill` | Back up and restore on scratch stacks with throwaway keys, then verify |
+| `make e2e-stack` | Start the prod-like stack from `RUNTIME_IMAGE` with `API_RATE_LIMIT_PER_MINUTE` raised for Playwright |
 | `make e2e` | Playwright journeys against the running stack (`E2E_BASE_URL`) |
 | `make config` | Validates the dev and prod compose configurations |
 | `make verify-ledger` | `php artisan app:ledger:verify` inside `web` |
@@ -62,23 +65,25 @@ Xdebug is installed in the dev image and off by default; start it with `XDEBUG_M
 ## Production
 
 One image (`Dockerfile`, target `runtime`) runs `web`, `worker` and `scheduler`; only the command
-differs. Secrets come from `.env` on the server and are never baked into the image.
+differs. Secrets come from `.env` on the server and are never baked into the image. Releases are
+immutable GHCR tags pushed by `.github/workflows/release.yml` on `v*` tags and deployed with
+`scripts/deploy.sh <tag>`, which pulls the images, runs the one-shot `migrate` service through
+`docker compose -f compose.yaml -f compose.prod.yaml up -d --wait` and smoke-tests `/up`.
+PostgreSQL publishes no port in production; the `backup` service encrypts daily dumps and receipts
+with age and ships them off-site.
 
-```bash
-APP_IMAGE=ghcr.io/<owner>/personal-finance:<tag>   # in .env, together with APP_KEY, SERVER_NAME, DB_*
-docker compose -f compose.yaml -f compose.prod.yaml up -d --wait
-```
-
-The `migrate` service runs `php artisan migrate --force` once; `web`, `worker` and `scheduler`
-start only after it completes successfully. PostgreSQL publishes no port in production.
+Start with `docs/ops/deploy.md`; backups and restores are in `docs/ops/backup-restore.md`, headers
+and limits in `docs/ops/security.md`, the monthly routine in `docs/ops/maintenance.md`.
 
 ## CI
 
 `.github/workflows/ci.yml` runs on every push and pull request: `pins` (`scripts/check-pins.sh`),
 `backend` (Pint, PHPStan, Pest on PostgreSQL 18), `frontend` (ESLint, Prettier, Vitest,
-production build, service worker and manifest checks), `image` (runtime image build with GHA cache,
-no push) and `e2e` (prod compose stack with the freshly built image, Playwright on Chromium and
-WebKit).
+production build, service worker and manifest checks), `image` (runtime and backup images with GHA
+cache, no push, secret scan) and `e2e` (prod compose stack with the freshly built images, security
+headers, a backup run, Playwright on Chromium and WebKit). `release.yml` pushes tagged images to
+GHCR, `restore-drill.yml` runs the backup and restore drill monthly, and Dependabot proposes monthly
+updates.
 
 ## Version pinning
 

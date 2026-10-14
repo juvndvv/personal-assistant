@@ -1,7 +1,9 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ConflictErrorBody, ValidationErrorBody } from './models';
 
+const FORBIDDEN = 403;
 const CONFLICT = 409;
+const IP_BLOCKED = 'ip_blocked';
 const UNPROCESSABLE = 422;
 
 export function conflictCode(error: unknown): string | null {
@@ -33,4 +35,12 @@ export function serverMessage(error: unknown): string | null {
   }
   const body = error.error as { message?: unknown } | null;
   return typeof body?.message === 'string' ? body.message : null;
+}
+
+export function isIpBlocked(error: unknown): boolean {
+  if (!(error instanceof HttpErrorResponse) || error.status !== FORBIDDEN) {
+    return false;
+  }
+  const body = error.error as { code?: unknown } | null;
+  return body?.code === IP_BLOCKED;
 }

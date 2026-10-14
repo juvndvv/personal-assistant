@@ -23,7 +23,7 @@ import { budgetVsActualSource } from './budget-vs-actual-source';
             <a
               routerLink="/informes"
               [queryParams]="{ period: data.period.label }"
-              class="text-sm text-primary hover:underline"
+              class="text-sm text-primary-text hover:underline"
               >Ver todos</a
             >
           }
@@ -35,7 +35,7 @@ import { budgetVsActualSource } from './budget-vs-actual-source';
           <a
             [routerLink]="budgetsPath"
             [queryParams]="{ period: data.period.label }"
-            class="mt-2 inline-block text-sm text-primary hover:underline"
+            class="mt-2 inline-block text-sm text-primary-text hover:underline"
             >Definir presupuestos</a
           >
         } @else {

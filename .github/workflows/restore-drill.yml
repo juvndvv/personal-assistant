@@ -1,0 +1,58 @@
+name: Restore drill
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 1 * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restore-drill
+  cancel-in-progress: false
+
+env:
+  APP_IMAGE: personal-finance:drill
+  BACKUP_IMAGE: personal-finance-backup:drill
+
+jobs:
+  drill:
+    name: Back up, restore into a fresh stack, verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: docker/setup-buildx-action@v4.4.1
+      - uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          target: runtime
+          load: true
+          push: false
+          tags: ${{ env.APP_IMAGE }}
+          cache-from: type=gha
+      - uses: docker/build-push-action@v7.4.0
+        with:
+          context: docker/backup
+          load: true
+          push: false
+          tags: ${{ env.BACKUP_IMAGE }}
+          cache-from: type=gha,scope=backup
+      - name: Seed, back up with a throwaway CI key pair, restore and verify
+        env:
+          DRILL_REPORT: ${{ runner.temp }}/restore-drill.log
+          TMPDIR: ${{ runner.temp }}
+        run: scripts/restore-drill.sh
+      - name: Drill summary
+        if: always()
+        env:
+          REPORT: ${{ runner.temp }}/restore-drill.log
+        run: |
+          {
+            echo "### Restore drill $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo
+            echo '```'
+            if [[ -f "$REPORT" ]]; then cat "$REPORT"; else echo "no restore report (the drill failed before restoring)"; fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

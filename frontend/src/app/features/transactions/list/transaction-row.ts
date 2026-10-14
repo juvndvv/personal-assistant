@@ -50,7 +50,7 @@ import {
             <span class="truncate font-medium text-foreground">{{ title() }}</span>
             @if (transaction().origin === 'recurring') {
               <span
-                class="shrink-0 rounded-md bg-info/15 px-1.5 py-px text-[0.6875rem] font-medium text-info"
+                class="shrink-0 rounded-md bg-info/15 px-1.5 py-px text-[0.6875rem] font-medium text-info-text"
                 data-testid="origin-badge"
                 >{{ recurringLabel }}</span
               >
@@ -59,7 +59,7 @@ import {
           <span class="block truncate text-xs text-muted-foreground">
             {{ subtitle() }}
             @for (tag of transaction().tags; track tag.id) {
-              <span class="ms-1 text-primary">#{{ tag.name }}</span>
+              <span class="ms-1 text-primary-text">#{{ tag.name }}</span>
             }
           </span>
         </span>
@@ -133,7 +133,7 @@ export class TransactionRow {
     if (!signed) {
       return 'text-foreground';
     }
-    return cents < 0 ? 'text-foreground' : 'text-success';
+    return cents < 0 ? 'text-foreground' : 'text-success-text';
   });
   protected readonly icon = computed(() => {
     const transaction = this.transaction();

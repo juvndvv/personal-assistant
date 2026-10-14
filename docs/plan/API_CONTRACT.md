@@ -75,6 +75,11 @@ Validation messages are Spanish (`lang/es`), field keys English.
 | `api` | 120/min per user | all `/api/v1` | M8 |
 | IP lockout | 10 failed logins per IP in 15 min → 403 `ip_blocked` for 60 min | `/auth/*` | M8 |
 
+Notes (M8):
+- The `api` limiter is keyed by user id, or by client IP for guests. Guests on authenticated routes get 401 before the limiter runs, so for guests it only counts on `POST /auth/login`.
+- IP lockout counts only rejected credentials (`Illuminate\Auth\Events\Failed`), not validation errors. The counter lives in the `database` cache store (`LOGIN_LOCKOUT_CACHE_STORE`) with a fixed 15-minute window from the first failure; a successful login from the IP resets it. The 10th failure still answers 422; every later `/auth/*` request from that IP answers 403 `{ "message": "...", "code": "ip_blocked" }` with a `Retry-After` header (seconds) until the hour expires. `auth.failed` (`ip`, `email`) and `auth.lockout` (`ip`, `failures`, `minutes`) are logged as warnings on the default (`stderr`) channel.
+- The client IP is resolved through `TrustProxies`; `TRUSTED_PROXIES` (comma-separated IPs/CIDRs or `*`) must list the reverse proxy when one sits in front of FrankenPHP. Empty means no proxy is trusted.
+
 ## 2. Resource shapes
 
 All `*Resource` classes return these shapes. Optional embedded objects are `null`, never omitted.

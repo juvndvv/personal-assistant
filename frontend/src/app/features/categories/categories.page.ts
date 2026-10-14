@@ -69,7 +69,11 @@ const KIND_TABS: readonly UiTabItem[] = [
     }),
   ],
   template: `
-    <a routerLink="/mas" class="mb-4 inline-block text-sm text-primary hover:underline">← Más</a>
+    <a
+      routerLink="/mas"
+      class="mb-4 inline-flex min-w-11 items-center text-sm text-primary-text hover:underline"
+      >← Más</a
+    >
     <app-page-header title="Categorías" subtitle="Organiza tus gastos e ingresos en dos niveles." />
 
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -147,7 +151,7 @@ const KIND_TABS: readonly UiTabItem[] = [
     </section>
 
     <ng-template #row let-category let-first="first" let-last="last">
-      <div class="flex items-center gap-3 px-4 py-3">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
         <span
           class="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted"
           [style.color]="category.color"
@@ -155,7 +159,7 @@ const KIND_TABS: readonly UiTabItem[] = [
         >
           <ng-icon [name]="iconName(category.icon)" size="18" />
         </span>
-        <span class="min-w-0 flex-1">
+        <span class="flex min-w-0 flex-1 basis-40 items-center">
           <span
             class="truncate"
             [class]="
@@ -168,7 +172,7 @@ const KIND_TABS: readonly UiTabItem[] = [
             <ui-badge tone="neutral" class="ms-2">Archivada</ui-badge>
           }
         </span>
-        <span class="flex shrink-0 items-center">
+        <span class="ms-auto flex shrink-0 items-center">
           <ui-button
             variant="ghost"
             size="icon"

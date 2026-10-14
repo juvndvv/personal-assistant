@@ -61,7 +61,7 @@ import { ReceiptUpload } from './receipt-upload';
               <a
                 [href]="receipt.download_url"
                 [attr.download]="receipt.original_name ?? ''"
-                class="inline-flex items-center gap-1 rounded-lg px-2 py-1 font-medium text-primary hover:bg-muted"
+                class="inline-flex items-center gap-1 rounded-lg px-2 py-1 font-medium text-primary-text hover:bg-muted"
               >
                 <ng-icon name="lucideDownload" size="16" aria-hidden="true" />
                 Descargar

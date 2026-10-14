@@ -74,7 +74,10 @@ async function setup(
       { provide: AttachmentsApi, useValue: quietAttachmentsApi() },
       provideRouter([]),
       { provide: AuthStore, useValue: { user: signal(null), logout: vi.fn() } },
-      { provide: AppUpdates, useValue: { updateReady: signal(false), reload: vi.fn() } },
+      {
+        provide: AppUpdates,
+        useValue: { updateReady: signal(false), reloadRequired: signal(false), reload: vi.fn() },
+      },
       { provide: QuickAddApi, useValue: { defaults: vi.fn(() => defaults$) } },
       {
         provide: AccountsApi,

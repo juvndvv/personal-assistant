@@ -149,7 +149,7 @@ const SAVED_LABEL: Record<EntryType, string> = {
             @for (category of frequent(); track category.id) {
               <button
                 type="button"
-                class="inline-flex min-h-10 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-colors"
+                class="inline-flex min-h-11 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-colors"
                 [class]="
                   category.id === categoryId()
                     ? 'border-primary bg-primary text-primary-foreground'

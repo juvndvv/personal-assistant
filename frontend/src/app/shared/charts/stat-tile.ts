@@ -7,7 +7,7 @@ export type StatStatus = 'good' | 'warning';
 
 const TONE_CLASS: Record<StatTone, string> = {
   neutral: 'text-foreground',
-  positive: 'text-success',
+  positive: 'text-success-text',
   negative: 'text-destructive',
 };
 

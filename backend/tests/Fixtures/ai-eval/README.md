@@ -2,8 +2,8 @@
 
 `php artisan app:ai-eval tests/Fixtures/ai-eval` runs every sample in this directory through the
 real capture pipeline (configured provider and models from `.env`, `CaptureProcessor` and
-`SanitizeExtraction`) and prints per-field accuracy and latency (p50, p90, max). It calls the real
-provider, costs money and is never run in CI. Run it before changing `AI_*_MODEL` or
+`SanitizeExtraction`) and prints per-field accuracy and latency (p50, p90, p95, max; the same
+total that the app stores as `captures.extraction_ms`). It calls the real provider, costs money and is never run in CI. Run it before changing `AI_*_MODEL` or
 `AI_*_PROVIDER`, and log the results in `docs/plan/QA_LOG.md` (target: p50 < 5 s).
 
 Samples are private and git-ignored; only this README is committed. Anonymize them first (no

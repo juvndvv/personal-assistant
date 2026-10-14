@@ -27,3 +27,40 @@ services:
 
   db:
     restart: unless-stopped
+
+  backup:
+    image: ${BACKUP_IMAGE:-personal-finance-backup:local}
+    build:
+      context: docker/backup
+    restart: unless-stopped
+    env_file:
+      - path: .env.backup
+        required: false
+    environment:
+      TZ: Europe/Madrid
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: ${DB_DATABASE:-finance}
+      PGUSER: ${DB_USERNAME:-finance}
+      PGPASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:?Set BACKUP_AGE_RECIPIENT to the age public key (age1...) in .env}
+      BACKUP_REMOTE: ${BACKUP_REMOTE:?Set BACKUP_REMOTE to an rclone remote path in .env}
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 3 * * *}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      BACKUP_STALE_AFTER_HOURS: ${BACKUP_STALE_AFTER_HOURS:-26}
+    volumes:
+      - appstorage:/data/appstorage:ro
+      - backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "backup-healthcheck"]
+      interval: 5m
+      timeout: 10s
+      retries: 1
+      start_period: 30s
+      start_interval: 5s
+
+volumes:
+  backups:

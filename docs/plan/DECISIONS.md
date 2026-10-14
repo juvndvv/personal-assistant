@@ -228,6 +228,7 @@ The gate result is appended below as ADR-026a during M0.
 | Tailwind CSS | 4.3.3 |
 | Vitest | 5.0.4 |
 | Playwright | 1.64.0 |
+| Backup tools (`docker/backup/Dockerfile`) | age 1.3.2, rclone 1.75.2, supercronic 0.2.49 (release binaries, sha256 pinned per arch) |
 
 Rules: exact versions in `package.json` (`.npmrc` `save-exact=true`), committed `package-lock.json` and `composer.lock`, exact Docker tags (never `latest`, never a bare major). GitHub Actions pinned to exact release tags. `scripts/check-pins.sh` runs in CI and fails on `latest`, `^`/`~` ranges in `package.json`, and non-exact image tags in Dockerfiles and compose files. Implementers re-check with `npm view` / `composer show -a` at install time and update this table if they pin something newer.
 
@@ -263,6 +264,16 @@ Rules: exact versions in `package.json` (`.npmrc` `save-exact=true`), committed 
 ### ADR-031 Backups
 
 **Decision.** Production `backup` service built from `docker/backup/Dockerfile` (`FROM postgres:18.6-alpine`, so `pg_dump` matches the server major, plus pinned `age`, `rclone`, `supercronic`). Daily at 03:00 Europe/Madrid: `pg_dump -Fc` and a tar of the `appstorage` volume (receipts), both encrypted with `age` to a public recipient (the private key never lives on the server), uploaded to an `rclone` remote (`BACKUP_REMOTE`), 30-day retention locally and remotely. A heartbeat file feeds a healthcheck that turns unhealthy after 26 h without success. `scripts/restore.sh` restores into a scratch stack and runs `app:ledger:verify`; one drill is recorded in `docs/plan/QA_LOG.md`, and `restore-drill.yml` runs it monthly in CI. The Laravel scheduler does not back up (TRD 5.4 allows either).
+
+### ADR-031a Backup and release refinements found during M8
+
+**Decision.**
+- The backup image is released next to the app image as `ghcr.io/<owner>/personal-finance-backup:<tag>`; `compose.prod.yaml` uses `${BACKUP_IMAGE}` (default `personal-finance-backup:local`, buildable from `docker/backup`). `scripts/deploy.sh <tag>` pins both `APP_IMAGE` and `BACKUP_IMAGE` in `.env`.
+- Remote credentials go in an optional `.env.backup` (`RCLONE_CONFIG_*`) loaded only by the `backup` service, so app containers never see them and the backup container never sees app secrets.
+- Each backup is three age files (`pf-<stamp>-db.dump.age`, `-storage.tar.gz.age`, `-manifest.txt.age`). The encrypted manifest holds the archives' sha256, per-table row counts and the storage file count; `scripts/restore.sh` fails on any mismatch, checks every receipt against `attachments.sha256`, then runs `migrate --force` and `app:ledger:verify`.
+- `scripts/restore-drill.sh` is the single drill implementation used locally (`make restore-drill`) and by `restore-drill.yml`.
+- `scripts/check-image-secrets.sh` scans env, layer history, file names and application file contents; it runs in the CI `image` job and before every release push. `backend/storage/framework/cache/*` is excluded from the build context because the PHPStan container cache captured a developer API key.
+- Release tags are immutable by policy: `release.yml` refuses to push a tag that already exists in GHCR. Platforms default to `linux/amd64`; the repository variable `RELEASE_PLATFORMS` adds `linux/arm64` for ARM NAS hosts.
 
 ### ADR-032 Security posture
 

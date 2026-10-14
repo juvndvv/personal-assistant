@@ -43,7 +43,7 @@ const CREATE_PREFIX = 'create:';
         <ul class="flex flex-wrap gap-2" [attr.aria-label]="label()">
           @for (tag of tags(); track tag) {
             <li
-              class="inline-flex items-center gap-1 rounded-full bg-primary/10 py-1 ps-3 pe-1 text-sm text-primary"
+              class="inline-flex items-center gap-1 rounded-full bg-primary/10 py-1 ps-3 pe-1 text-sm text-primary-text"
             >
               {{ tag }}
               <button

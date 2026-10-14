@@ -13,6 +13,8 @@ Per-milestone QA results, manual device checks and performance numbers (see
 | iPhone Safari: voice (hold-to-talk, `audio/mp4` upload transcribed) and photo capture, review, confirm, receipt visible on the movement | M3 | pending |
 | Installed PWA (iPhone and Android): voice and photo capture end to end with microphone and camera permissions | M3 | pending |
 | `php artisan app:ai-eval tests/Fixtures/ai-eval` with real anonymized samples and `OPENAI_API_KEY`: per-field accuracy and latency (target p50 < 5 s) | M3 | pending |
+| Capture `extraction_ms` p95: `php artisan app:ai-eval tests/Fixtures/ai-eval` with `OPENAI_API_KEY` (p95 line), then after real use `make capture-latency` on the production stack (`percentile_cont(0.95)` over `captures.extraction_ms` per kind); record both in the M8 section | M8 | pending |
+| Production restore drill from the real off-site remote (`make restore`, then `app:ledger:verify`) | M8 | pending |
 
 ## M0 Foundation
 
@@ -143,3 +145,118 @@ the shell that ran Playwright so `global-setup.ts` resets the login throttle on 
 | Frontend build | `npx ng build` | success |
 
 Teardown: `docker compose down -v` on `pf-m5-qa`; no containers or volumes of the scratch project remain.
+
+## M8 Operations hardening and release (infra)
+
+### 2026-10-14 04:05-04:32 CEST infra validation (host macOS arm64, Docker 29.4.0 via OrbStack, Compose v5.1.2)
+
+Images built from the working tree at `3d80efd+dirty`: `docker build --target runtime -t personal-finance:m8 .`
+and `docker build -t personal-finance-backup:local docker/backup` (postgres 18.6-alpine, age v1.3.2,
+rclone v1.75.2, supercronic v0.2.49, all sha256-verified at build time). Prod-like scratch project
+`pf-m8-infra` (`compose.yaml` + `compose.prod.yaml` + an overlay binding a host directory as the
+off-site remote), `HTTP_PORT=18680`, `HTTPS_PORT=18843` (host 80/443 are taken by another project).
+
+| Check | Command | Result |
+|---|---|---|
+| Compose config | `make config` (dev and prod, AI env reach) | valid; prod requires `APP_IMAGE`, `BACKUP_AGE_RECIPIENT`, `BACKUP_REMOTE` |
+| Stack up | `docker compose up -d --wait` | `migrate` exited 0; `db`, `web`, `backup` healthy; `worker`, `scheduler` running |
+| db port | `docker compose ps` / `config` | db shows only `5432/tcp` (not published) |
+| HTTPS headers | `curl -skI https://localhost:18843/login` | `strict-transport-security: max-age=31536000; includeSubDomains`, CSP `default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`, `x-content-type-options: nosniff`, `referrer-policy: same-origin`, `permissions-policy: camera=(self), microphone=(self)`, `x-frame-options: DENY`; same headers on `/up` (API) |
+| HTTP redirect | `curl -sI http://localhost:18680/login` | `308` to `https://localhost/login` |
+| Backup run | `docker compose exec backup backup-run` | three `age` files (`db.dump`, `storage.tar.gz`, `manifest.txt`) locally (0600) and on the remote; heartbeat written |
+| Unreadable without key | `pg_restore -l`, `tar -tz` on the ciphertext; `age -d` with another identity; grep of a seeded email | `not a valid archive`, `invalid magic`, `no identity matched any of the recipients`, no plaintext match; no `AGE-SECRET-KEY` in the backup container env |
+| Retention | files dated 2026-09-01 and 2026-10-01 locally and remotely, then `backup-run` | 2026-09-01 pruned in both places; 2026-10-01 (13 days) kept |
+| Stale healthcheck | heartbeat set to now - 27 h | `backup-healthcheck` exit 1 (`stale: ... 27 h ago (limit 26 h)`); a probe container with a 2 s interval reported Docker health `unhealthy` |
+| Rate limits | curl with Sanctum CSRF flow | 5 x 422 then `429` on the 6th bad login; 10 x 422 from one IP with distinct emails then `403 {"code":"ip_blocked"}`, also for the correct password; 120 x 200 then `429` on `/api/v1/accounts`; logs show `auth.failed` and `auth.lockout` |
+| Deploy from a pulled tag | images pushed to a throwaway local `registry:3.0.0`, local copies removed, `ENV_FILE=... COMPOSE_PROJECT_NAME=pf-m8-deploy DEPLOY_SMOKE_URL=https://localhost:18843/up DEPLOY_SMOKE_INSECURE=1 scripts/deploy.sh v0.8.0-rc.1` | pulled both images, pinned `APP_IMAGE`/`BACKUP_IMAGE` in the env file, `migrate` ran once (exit 0), `/up` ok, HSTS on the public URL, all services healthy |
+| Image secrets | `scripts/check-image-secrets.sh personal-finance:m8 personal-finance-backup:local` | first run FAILED: the local PHPStan container cache under `backend/storage/framework/cache/phpstan` (gitignored, not dockerignored) held an OpenAI-style key captured from the developer environment and was baked into the runtime image. Fixed by excluding `backend/storage/framework/cache/*` and `backend/storage/*.key` in `.dockerignore`; rebuilt image passes. A probe image with a baked `ENV`, a sensitive `ARG` and `/app/.env` fails with 6 findings |
+| Playwright M0-M8 with production headers | `E2E_EXPECT_SECURITY_HEADERS=1 npx playwright test` against `pf-m8-infra` | with the stock 120/min API limit: the M8 hardening specs (headers, no CSP violations on every signed-in page) passed, but 52 M0-M7 journeys failed with HTTP 429 from the API throttle (226 x 429 in the web log); with the limit raised to 100000 inside the scratch container only (no source change): 111/111 passed in 2.6 min. See open issue below |
+| Lint | `actionlint` 1.7.12 (Docker), `shellcheck` 0.11.0 `-S warning` on `scripts/*.sh` and `docker/backup/*.sh`, `scripts/check-pins.sh` | clean |
+
+Open issue for the QA gate: the parallel Playwright suite shares one user and exceeds the new
+120 requests/minute API limit, so the CI `e2e` job will fail until the limit is configurable for
+the e2e stack (for example an env-backed `finance.security.api_rate_limit_per_minute` set high in
+the CI compose env) or the suite is throttled.
+
+Teardown: every scratch project (`pf-m8-infra`, `pf-m8-deploy`, `pf-drill-source`, `pf-restore-drill`)
+removed with `down -v`; the registry container and its pushed tags removed.
+
+### 2026-10-14 04:31 CEST restore drill
+
+`APP_IMAGE=personal-finance:m8 BACKUP_IMAGE=personal-finance-backup:local scripts/restore-drill.sh`
+(the same script `.github/workflows/restore-drill.yml` runs monthly). Total 30 s.
+
+| Step | Result |
+|---|---|
+| Source stack `pf-drill-source` (prod overlay) | user with default categories, `DevSeeder`, one 4 KiB receipt linked to a movement; `app:ledger:verify` ok |
+| Backup with a throwaway key pair | `pf-20261014T043127` uploaded as three age files; unreadable by `pg_restore` and by another identity |
+| Retention and staleness | 2000-01-01 copies pruned locally and remotely, fresh kept; healthcheck fails at 27 h |
+| `scripts/restore.sh` (newest backup `pf-20261014T043128`) into `pf-restore-drill` | sha256 of both archives match the manifest; `pg_restore` ok; 19 tables, row counts identical (accounts 4, categories 29, transactions 23, transfers 2, attachments 1, settings 1, users 1, migrations 21, others 0); 2 storage files; 1 receipt matches `attachments.sha256`; `migrate` nothing to migrate; `app:ledger:verify` "Ledger OK"; restore took 12 s |
+| Teardown | both scratch projects and the decrypted files removed |
+
+Earlier manual run at 04:09 restoring `pf-20261014T040844` gave the same counts; negative runs
+failed as expected (wrong identity: "cannot decrypt the manifest"; one byte appended to the dump:
+"sha256 mismatch").
+
+Save latency and capture `extraction_ms` p95 for the M8 gate: save p95 is recorded in the perf
+entry below (30 quick-add saves on 10k movements, p95 11 ms, budget 1 s at the product level and
+300 ms in the test). The production restore drill from the real off-site remote is pending until
+the server exists (manual).
+
+### 2026-10-14 04:53 CEST perf (Darwin arm64, PHP 8.5.8, PostgreSQL 18.6)
+
+Generated by `make perf` (`scripts/perf.sh`) at commit `3d80efd+dirty`.
+
+| Check | Command | Result |
+|---|---|---|
+| Scratch seed | `php artisan db:seed --class=PerformanceSeeder` on `finance_perf` | pass; 50000 live movements in 6224 ms |
+| Ledger invariants | `php artisan app:ledger:verify` on `finance_perf` | pass; Ledger OK: no invariant violations found. |
+| Perf group | `php artisan test --group=perf` on `finance_test` | pass; Tests: 5 passed (553 assertions) |
+
+| Endpoint | month_start_day | p50 ms | p95 ms | p95 < 300 ms |
+|---|---|---|---|---|
+| save (POST /transactions) | - | 9 | 11 | pass |
+| summary | 1 | 5 | 9 | pass |
+| trend | 1 | 17 | 20 | pass |
+| trend by category | 1 | 32 | 35 | pass |
+| net worth | 1 | 19 | 22 | pass |
+| capture metrics | 1 | 7 | 9 | pass |
+| budget vs actual | 1 | 9 | 11 | pass |
+| summary | 25 | 4 | 8 | pass |
+| trend | 25 | 20 | 22 | pass |
+| trend by category | 25 | 32 | 34 | pass |
+| net worth | 25 | 19 | 21 | pass |
+| capture metrics | 25 | 7 | 9 | pass |
+| budget vs actual | 25 | 5 | 9 | pass |
+
+A first run of this entry failed with HTTP 429 on the reports group because the new 120/min API
+limit applied to the 40-sample loops; `ReportsPerformanceTest` now raises
+`finance.security.api_rate_limit_per_minute` inside the test only.
+
+Capture `extraction_ms` p95: not measured. No real-provider run was possible in this gate (no
+`OPENAI_API_KEY` and no anonymized samples in `tests/Fixtures/ai-eval`), and test runs use AI fakes
+whose timings are meaningless, so no value is recorded. The measurement is defined and listed under
+"Pending manual items": `php artisan app:ai-eval tests/Fixtures/ai-eval` now prints p95 of the same
+total that is stored as `captures.extraction_ms`, and `make capture-latency` runs
+`percentile_cont(0.95) WITHIN GROUP (ORDER BY extraction_ms)` per capture kind over the production
+`captures` table (checked against the dev database: valid SQL, 0 rows).
+
+Gate summary: save p95 < 1 s is met. The capture `extraction_ms` p95 half of the criterion is
+formally deferred, see `milestones/M8.md`, "Deferrals".
+
+### 2026-10-14 05:10-05:20 CEST M8 fixes: API limit env and single-snapshot backups
+
+Images: `docker build --target runtime -t personal-finance:m8fix .` and
+`docker build -t personal-finance-backup:local docker/backup` from the working tree.
+
+| Check | Command | Result |
+|---|---|---|
+| API limit reaches the containers | `make config` (dev and prod) with `scripts/check-compose-env.sh` now requiring `API_RATE_LIMIT_PER_MINUTE` and `LOGIN_LOCKOUT_CACHE_STORE` | `compose-env: ok 18 AI and security variables reach web worker scheduler`; an empty `API_RATE_LIMIT_PER_MINUTE` renders as `120` |
+| Limit fallback | `php artisan test tests/Feature/Security/ApiRateLimitTest.php` | 12 passed; `''`, `'0'`, `0`, `-5` and `'unlimited'` all fall back to 120/min |
+| Playwright M0-M8 with production headers | scratch project `pf-m8-fix` (`compose.yaml` + `compose.prod.yaml`, `HTTPS_PORT=18843`, `API_RATE_LIMIT_PER_MINUTE=100000` as in CI and `make e2e-stack`), `E2E_EXPECT_SECURITY_HEADERS=1 npx playwright test` | 111/111 passed in 2.6 min; 0 x 429 in the web log; the open issue from 04:05 is closed |
+| Backup on the post-journey stack | `docker compose exec backup backup-run` | row counts, `pg_dump --snapshot` and the receipt list come from one exported REPEATABLE READ snapshot; `storage_files` is counted from the archived tar stream; no scratch files left in `/backups` |
+| Backup refuses an inconsistent archive | attachment row pointing to a missing receipt, then `backup-run` | `ERROR 1 receipt(s) referenced by the database dump are missing from the storage archive`; no `.partial` files kept |
+| Restore drill | `make restore-drill` | passed in 32 s; 19 tables match the manifest, 2 storage files, 1 receipt matches its sha256, `app:ledger:verify` Ledger OK |
+| Lint | `shellcheck` 0.11.0 (Docker) on `docker/backup/backup-run.sh` and `scripts/check-compose-env.sh`; `pint`, `phpstan` | clean |
+
+Teardown: `pf-m8-fix`, `pf-drill-source` and `pf-restore-drill` removed with `down -v`.

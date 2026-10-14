@@ -99,7 +99,7 @@ const MORE_LINKS: readonly MoreLink[] = [
         @for (link of links; track link.path) {
           <li>
             <a [routerLink]="link.path" class="flex items-center gap-3 px-4 py-3 hover:bg-muted/60">
-              <ng-icon [name]="link.icon" size="20" class="text-primary" aria-hidden="true" />
+              <ng-icon [name]="link.icon" size="20" class="text-primary-text" aria-hidden="true" />
               <span class="min-w-0 flex-1">
                 <span class="block font-medium text-foreground">{{ link.label }}</span>
                 <span class="block text-xs text-muted-foreground">{{ link.description }}</span>

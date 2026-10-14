@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, effect, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
@@ -9,13 +9,9 @@ import {
   lucideHouse,
   lucideLogOut,
   lucidePlus,
-  lucideWifiOff,
 } from '@ng-icons/lucide';
 import { AuthStore } from '../../core/auth/auth.store';
-import { AppUpdates } from '../../core/pwa/app-updates';
-import { ConnectivityStatus } from '../../core/pwa/connectivity-status';
 import { filter } from 'rxjs';
-import { UiToast } from '../../shared/ui';
 import { PendingDrafts } from '../drafts/pending-drafts';
 import { MovementSheets } from '../transactions/movement-sheets';
 import { MovementSheetsHost } from '../transactions/movement-sheets-host';
@@ -32,7 +28,6 @@ import { NAV_ITEMS } from './nav-items';
       lucideHouse,
       lucideLogOut,
       lucidePlus,
-      lucideWifiOff,
     }),
   ],
   host: { class: 'flex min-h-dvh bg-muted/40' },
@@ -40,7 +35,7 @@ import { NAV_ITEMS } from './nav-items';
     <aside
       class="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-e border-border bg-background px-4 py-6 md:flex"
     >
-      <p class="px-3 text-lg font-semibold text-primary">Finanzas</p>
+      <p class="px-3 text-lg font-semibold text-primary-text">Finanzas</p>
       <nav class="mt-8 flex flex-1 flex-col gap-1" aria-label="Navegación principal">
         @for (item of navItems; track item.path) {
           @if (item.primary) {
@@ -55,7 +50,7 @@ import { NAV_ITEMS } from './nav-items';
           } @else {
             <a
               [routerLink]="item.path"
-              routerLinkActive="bg-primary/10 text-primary"
+              routerLinkActive="bg-primary/10 text-primary-text"
               [routerLinkActiveOptions]="{ exact: item.exact }"
               class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
             >
@@ -87,15 +82,6 @@ import { NAV_ITEMS } from './nav-items';
     </aside>
 
     <div class="flex min-w-0 flex-1 flex-col">
-      @if (!connectivity.online()) {
-        <p
-          role="status"
-          class="flex items-center justify-center gap-2 bg-warning/15 px-4 py-2 text-sm text-foreground"
-        >
-          <ng-icon name="lucideWifiOff" size="16" aria-hidden="true" />
-          Sin conexión. Finanzas necesita conexión para guardar y consultar datos.
-        </p>
-      }
       <main class="mx-auto w-full max-w-5xl flex-1 px-4 pt-6 pb-28 md:px-8 md:pb-10">
         <router-outlet />
       </main>
@@ -120,7 +106,7 @@ import { NAV_ITEMS } from './nav-items';
             } @else {
               <a
                 [routerLink]="item.path"
-                routerLinkActive="text-primary"
+                routerLinkActive="text-primary-text"
                 [routerLinkActiveOptions]="{ exact: item.exact }"
                 class="relative flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-muted-foreground"
               >
@@ -147,11 +133,8 @@ import { NAV_ITEMS } from './nav-items';
 })
 export class ShellLayout {
   protected readonly authStore = inject(AuthStore);
-  protected readonly connectivity = inject(ConnectivityStatus);
   protected readonly navItems = NAV_ITEMS;
   protected readonly sheets = inject(MovementSheets);
-  private readonly appUpdates = inject(AppUpdates);
-  private readonly toast = inject(UiToast);
   private readonly pendingDrafts = inject(PendingDrafts);
   protected readonly pendingCount = this.pendingDrafts.count;
 
@@ -163,13 +146,6 @@ export class ShellLayout {
         takeUntilDestroyed(),
       )
       .subscribe(() => void this.pendingDrafts.refresh());
-    effect(() => {
-      if (this.appUpdates.updateReady()) {
-        this.toast.info('Hay una nueva versión disponible', {
-          action: { label: 'Recargar', onClick: () => this.appUpdates.reload() },
-        });
-      }
-    });
   }
 
   protected pendingLabel(): string {

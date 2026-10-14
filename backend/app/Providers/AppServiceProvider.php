@@ -8,6 +8,9 @@ use App\Console\Input\PasswordInput;
 use App\Console\Input\StdinPasswordInput;
 use App\Domain\Period\PeriodResolver;
 use App\Models\Setting;
+use App\Security\LoginLockout;
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Events\DiagnosingHealth;
 use Illuminate\Http\Request;
@@ -33,6 +36,8 @@ final class AppServiceProvider extends ServiceProvider
             PeriodResolver::class,
             fn (): PeriodResolver => new PeriodResolver(Setting::current()->month_start_day),
         );
+
+        $this->app->bind(LoginLockout::class, fn (): LoginLockout => LoginLockout::fromConfig());
     }
 
     public function boot(): void
@@ -42,6 +47,20 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         Sanctum::getAccessTokenFromRequestUsing(fn (): ?string => null);
+
+        Event::listen(Failed::class, function (Failed $event): void {
+            $email = $event->credentials['email'] ?? null;
+
+            app(LoginLockout::class)->recordFailure(self::clientIp(), is_string($email) ? $email : null);
+        });
+
+        Event::listen(Login::class, function (): void {
+            app(LoginLockout::class)->clearFailures(self::clientIp());
+        });
+
+        RateLimiter::for('api', fn (Request $request): Limit => Limit::perMinute(self::apiRequestsPerMinute())->by(
+            self::userThrottleKey($request),
+        ));
 
         RateLimiter::for('login', fn (Request $request): Limit => Limit::perMinute(5)->by(
             self::loginThrottleKey($request),
@@ -65,6 +84,18 @@ final class AppServiceProvider extends ServiceProvider
         $email = $request->input('email');
 
         return (is_string($email) ? Str::lower(trim($email)) : '').'|'.$request->ip();
+    }
+
+    private static function clientIp(): string
+    {
+        return request()->ip() ?? 'unknown';
+    }
+
+    private static function apiRequestsPerMinute(): int
+    {
+        $value = config('finance.security.api_rate_limit_per_minute');
+
+        return is_numeric($value) && (int) $value > 0 ? (int) $value : 120;
     }
 
     private static function capturesPerHour(): int

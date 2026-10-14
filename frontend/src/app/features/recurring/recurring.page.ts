@@ -33,7 +33,11 @@ import { isPaused, scheduleSummary } from './recurring-display';
   ],
   providers: [provideIcons({ lucideRepeat })],
   template: `
-    <a routerLink="/mas" class="mb-4 inline-block text-sm text-primary hover:underline">← Más</a>
+    <a
+      routerLink="/mas"
+      class="mb-4 inline-flex min-w-11 items-center text-sm text-primary-text hover:underline"
+      >← Más</a
+    >
     <app-page-header
       title="Fijos"
       subtitle="Ingresos y gastos que se repiten. Se registran solos en su fecha."
@@ -59,7 +63,10 @@ import { isPaused, scheduleSummary } from './recurring-display';
         description="Añade tu nómina, el alquiler o las facturas para que se registren solos cada mes."
         icon="lucideRepeat"
       >
-        <a routerLink="/mas/fijos/nuevo" class="text-sm font-medium text-primary hover:underline">
+        <a
+          routerLink="/mas/fijos/nuevo"
+          class="text-sm font-medium text-primary-text hover:underline"
+        >
           Nuevo fijo
         </a>
       </ui-empty-state>
@@ -93,7 +100,7 @@ import { isPaused, scheduleSummary } from './recurring-display';
             </a>
             <span
               class="shrink-0 font-semibold tabular-nums"
-              [class]="template.type === 'income' ? 'text-success' : 'text-foreground'"
+              [class]="template.type === 'income' ? 'text-success-text' : 'text-foreground'"
             >
               {{ signedAmount(template) | eur: { signed: true } }}
             </span>

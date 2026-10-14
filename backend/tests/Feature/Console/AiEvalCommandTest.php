@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Ai\Agents\TransactionExtractor;
 use App\Models\Account;
 use App\Models\Category;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Laravel\Ai\Transcription;
 use Tests\Support\Captures;
@@ -39,11 +40,13 @@ it('scores each field and reports latency using the faked pipeline', function ()
         Captures::extraction(['amount_cents' => 4500, 'category_id' => $this->groceries->id]),
     ])->preventStrayPrompts();
 
-    $this->artisan('app:ai-eval', ['dir' => $this->samples])
-        ->expectsOutputToContain('amount_cents=4500 (expected 4537)')
-        ->expectsOutputToContain('50.0 %')
-        ->expectsOutputToContain('Latency over 2 samples')
-        ->assertSuccessful();
+    $exitCode = $this->withoutMockingConsoleOutput()->artisan('app:ai-eval', ['dir' => $this->samples]);
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(0)
+        ->and($output)->toContain('amount_cents=4500 (expected 4537)')
+        ->and($output)->toContain('50.0 %')
+        ->and($output)->toMatch('/Latency over 2 samples: p50 \\d+ ms, p90 \\d+ ms, p95 \\d+ ms, max \\d+ ms\\./');
 
     TransactionExtractor::assertPromptedTimes(2);
 });

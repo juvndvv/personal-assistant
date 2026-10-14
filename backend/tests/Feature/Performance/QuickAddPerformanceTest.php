@@ -15,6 +15,8 @@ const POST_TRANSACTION_BUDGET_MS = 300;
 
 const POST_TRANSACTION_MAX_QUERIES = 15;
 
+const POST_TRANSACTION_SAMPLES = 30;
+
 beforeEach(function (): void {
     $this->travelTo(CarbonImmutable::parse('2026-10-13 10:00', 'Europe/Madrid'));
     $this->actingAs(User::factory()->create());
@@ -100,12 +102,35 @@ it('lists, searches and filters 10k rows with a query count independent of the p
         ->assertJsonPath('meta.total', fn (int $total): bool => $total > 0);
 });
 
-it('records a quick-add expense within the latency budget on 10k rows', function (): void {
+/**
+ * @param  list<int>  $sortedMicroseconds
+ */
+function quickAddPercentileMs(array $sortedMicroseconds, int $percentile): int
+{
+    $index = (int) ceil($percentile / 100 * count($sortedMicroseconds)) - 1;
+
+    return intdiv($sortedMicroseconds[max($index, 0)], 1_000);
+}
+
+it('records quick-add expenses within the p95 latency budget on 10k rows', function (): void {
     $this->postJson('/api/v1/transactions', quickAddPayload())->assertCreated();
 
-    $elapsed = elapsedMs(fn () => $this->postJson('/api/v1/transactions', quickAddPayload())->assertCreated());
+    $latencies = [];
 
-    expect($elapsed)->toBeLessThan(POST_TRANSACTION_BUDGET_MS);
+    for ($sample = 0; $sample < POST_TRANSACTION_SAMPLES; $sample++) {
+        $started = hrtime(true);
+        $this->postJson('/api/v1/transactions', quickAddPayload())->assertCreated();
+        $latencies[] = intdiv(hrtime(true) - $started, 1_000);
+    }
+
+    sort($latencies);
+    $p95 = quickAddPercentileMs($latencies, 95);
+
+    fwrite(STDOUT, PHP_EOL.'scope=save '.json_encode([
+        'save (POST /transactions)' => ['p50' => quickAddPercentileMs($latencies, 50), 'p95' => $p95],
+    ]).PHP_EOL);
+
+    expect($p95)->toBeLessThan(POST_TRANSACTION_BUDGET_MS);
 })->group('perf');
 
 it('searches 10k rows within the latency budget', function (): void {

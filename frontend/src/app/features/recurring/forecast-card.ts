@@ -33,7 +33,10 @@ const PENDING_STATUSES = new Set<ForecastItem['status']>(['upcoming', 'awaiting_
           <p class="mt-3 text-sm text-muted-foreground">
             No tienes ingresos ni gastos fijos en este periodo.
           </p>
-          <a routerLink="/mas/fijos" class="mt-2 inline-block text-sm text-primary hover:underline">
+          <a
+            routerLink="/mas/fijos"
+            class="mt-2 inline-block text-sm text-primary-text hover:underline"
+          >
             Configurar fijos
           </a>
         } @else {
@@ -46,7 +49,7 @@ const PENDING_STATUSES = new Set<ForecastItem['status']>(['upcoming', 'awaiting_
             </div>
             <div class="rounded-xl bg-muted/60 px-3 py-2">
               <dt class="text-xs text-muted-foreground">Ingresos pendientes</dt>
-              <dd class="font-semibold tabular-nums text-success" data-testid="pending-income">
+              <dd class="font-semibold tabular-nums text-success-text" data-testid="pending-income">
                 {{ data.pending_income_cents | eur }}
               </dd>
             </div>
@@ -75,7 +78,7 @@ const PENDING_STATUSES = new Set<ForecastItem['status']>(['upcoming', 'awaiting_
                   </span>
                   <span
                     class="shrink-0 tabular-nums"
-                    [class]="item.type === 'income' ? 'text-success' : 'text-foreground'"
+                    [class]="item.type === 'income' ? 'text-success-text' : 'text-foreground'"
                   >
                     @if (item.is_variable) {
                       <span class="text-xs text-muted-foreground">≈</span>

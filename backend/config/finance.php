@@ -26,4 +26,14 @@ return [
         'rate_limit_per_hour' => 60,
     ],
 
+    'security' => [
+        'api_rate_limit_per_minute' => (int) env('API_RATE_LIMIT_PER_MINUTE', 120),
+        'login_lockout' => [
+            'cache_store' => env('LOGIN_LOCKOUT_CACHE_STORE', 'database'),
+            'max_failures' => 10,
+            'window_minutes' => 15,
+            'block_minutes' => 60,
+        ],
+    ],
+
 ];
