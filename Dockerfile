@@ -14,7 +14,7 @@ COPY backend/ ./
 RUN composer dump-autoload --no-dev --optimize --no-scripts
 
 
-FROM dunglas/frankenphp:1.13.0-php8.5.11-alpine AS runtime
+FROM dunglas/frankenphp:1.13.1-php8.5.11-alpine AS runtime
 ARG APP_UID=1000
 ARG APP_GID=1000
 ENV APP_ENV=production \
