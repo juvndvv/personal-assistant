@@ -1,4 +1,4 @@
-FROM node:24.21.0-alpine AS frontend-build
+FROM node:24.22.2-alpine AS frontend-build
 WORKDIR /src
 COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
 RUN npm ci --no-audit --no-fund
